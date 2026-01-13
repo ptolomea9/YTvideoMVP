@@ -14,7 +14,7 @@ None
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 1: Foundation** - Next.js 15 + Supabase schema, auth, and RLS
+- [ ] **Phase 1: Foundation** - Next.js 15 + Supabase schema, auth, and RLS (In progress)
 - [ ] **Phase 2: Create Wizard** - Four-step /create flow for video generation
 - [ ] **Phase 3: n8n Integration** - Debug workflow and video generation pipeline
 - [ ] **Phase 4: Dashboard** - Video gallery with progress and downloads
@@ -31,7 +31,7 @@ None
 **Plans**: TBD
 
 Plans:
-- [ ] 01-01: Next.js 15 project setup with Tailwind + shadcn/ui
+- [x] 01-01: Next.js 15 project setup with Tailwind + shadcn/ui ✓
 - [ ] 01-02: Supabase schema and RLS policies
 - [ ] 01-03: Auth flow (login, signup, session management)
 
@@ -107,7 +107,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/3 | Not started | - |
+| 1. Foundation | 1/3 | In progress | - |
 | 2. Create Wizard | 0/5 | Not started | - |
 | 3. n8n Integration | 0/7 | Not started | - |
 | 4. Dashboard | 0/4 | Not started | - |
