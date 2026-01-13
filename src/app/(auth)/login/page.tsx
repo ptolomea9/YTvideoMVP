@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -16,7 +16,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
@@ -104,5 +104,39 @@ export default function LoginPage() {
         </CardFooter>
       </form>
     </Card>
+  );
+}
+
+function LoginFormSkeleton() {
+  return (
+    <Card className="border-border">
+      <CardHeader className="space-y-1">
+        <CardTitle className="text-2xl font-heading">Welcome back</CardTitle>
+        <CardDescription>
+          Enter your credentials to access your account
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <div className="h-4 w-12 bg-muted rounded animate-pulse" />
+          <div className="h-9 w-full bg-muted rounded animate-pulse" />
+        </div>
+        <div className="space-y-2">
+          <div className="h-4 w-16 bg-muted rounded animate-pulse" />
+          <div className="h-9 w-full bg-muted rounded animate-pulse" />
+        </div>
+      </CardContent>
+      <CardFooter className="flex flex-col space-y-4">
+        <div className="h-9 w-full bg-muted rounded animate-pulse" />
+      </CardFooter>
+    </Card>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFormSkeleton />}>
+      <LoginForm />
+    </Suspense>
   );
 }
