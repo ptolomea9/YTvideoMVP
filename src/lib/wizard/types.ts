@@ -34,6 +34,8 @@ export interface PropertyData {
   bedrooms: number;
   bathrooms: number;
   squareFeet: number;
+  lotSize?: number;
+  lotSizeUnit?: "sqft" | "acres";
   listingPrice: number;
   description: string;
   features: string[];

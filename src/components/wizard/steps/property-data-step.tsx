@@ -33,6 +33,14 @@ const PROPERTY_TYPES = [
 ] as const;
 
 /**
+ * Lot size unit options.
+ */
+const LOT_SIZE_UNITS = [
+  { value: "sqft", label: "sq ft" },
+  { value: "acres", label: "acres" },
+] as const;
+
+/**
  * Zod schema for property data validation.
  */
 const propertyDataSchema = z.object({
@@ -44,6 +52,8 @@ const propertyDataSchema = z.object({
   bedrooms: z.number().min(0, "Bedrooms must be 0 or more"),
   bathrooms: z.number().min(0, "Bathrooms must be 0 or more"),
   squareFeet: z.number().min(0, "Square feet must be 0 or more"),
+  lotSize: z.number().min(0, "Lot size must be 0 or more").optional(),
+  lotSizeUnit: z.enum(["sqft", "acres"]).optional(),
   listingPrice: z.number().min(0, "Price must be 0 or more"),
   description: z.string().optional(),
 });
@@ -91,12 +101,15 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
         bedrooms: state.propertyData.bedrooms || 0,
         bathrooms: state.propertyData.bathrooms || 0,
         squareFeet: state.propertyData.squareFeet || 0,
+        lotSize: state.propertyData.lotSize || undefined,
+        lotSizeUnit: state.propertyData.lotSizeUnit || "sqft",
         listingPrice: state.propertyData.listingPrice || 0,
         description: state.propertyData.description || "",
       },
     });
 
     const propertyType = watch("propertyType");
+    const lotSizeUnit = watch("lotSizeUnit");
 
     /**
      * Handle form submission - save to wizard context.
@@ -330,6 +343,43 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
               />
               {errors.squareFeet && (
                 <p className="text-sm text-destructive">{errors.squareFeet.message}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="lotSize">Lot Size (optional)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="lotSize"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder={lotSizeUnit === "acres" ? "0.25" : "10890"}
+                  className="flex-1 focus-visible:ring-primary/50"
+                  {...register("lotSize", { valueAsNumber: true })}
+                />
+                <Select
+                  value={lotSizeUnit || "sqft"}
+                  onValueChange={(value: "sqft" | "acres") =>
+                    setValue("lotSizeUnit", value, { shouldValidate: true })
+                  }
+                >
+                  <SelectTrigger className="w-24 focus-visible:ring-primary/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LOT_SIZE_UNITS.map((unit) => (
+                      <SelectItem key={unit.value} value={unit.value}>
+                        {unit.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {errors.lotSize && (
+                <p className="text-sm text-destructive">{errors.lotSize.message}</p>
               )}
             </div>
           </div>
