@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { PropertyData, WizardImage, ScriptSection, StyleOptions } from "@/lib/wizard/types";
 import { transformWizardToN8n, buildWebhookUrl, triggerYoutubeVideo, type MusicTrackMeta } from "@/lib/n8n";
 
@@ -28,6 +29,33 @@ export async function POST(request: Request) {
         { error: "Unauthorized" },
         { status: 401 }
       );
+    }
+
+    // Ensure profile exists (self-healing for users created before trigger)
+    // Use service role client to bypass RLS for profile creation
+    const serviceClient = createServiceRoleClient();
+    const { data: existingProfile } = await serviceClient
+      .from("profiles")
+      .select("id")
+      .eq("id", user.id)
+      .single();
+
+    if (!existingProfile) {
+      const { error: profileError } = await serviceClient
+        .from("profiles")
+        .insert({
+          id: user.id,
+          email: user.email || "",
+          full_name: user.user_metadata?.full_name || null,
+        });
+
+      if (profileError) {
+        console.error("Error creating profile:", profileError);
+        return NextResponse.json(
+          { error: "Failed to create user profile" },
+          { status: 500 }
+        );
+      }
     }
 
     // Parse request body

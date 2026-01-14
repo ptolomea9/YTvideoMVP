@@ -147,7 +147,11 @@ export function VideoCard({ video, onSelect }: VideoCardProps) {
 
         {/* Progress overlay for in-progress and failed videos */}
         {showOverlay && (
-          <VideoProgressOverlay status={video.status} errorMessage={video.error_message} />
+          <VideoProgressOverlay
+            status={video.status}
+            errorMessage={video.error_message}
+            address={displayAddress}
+          />
         )}
 
         {/* Status badge - top right */}
@@ -166,29 +170,31 @@ export function VideoCard({ video, onSelect }: VideoCardProps) {
           </span>
         </div>
 
-        {/* Address overlay - bottom with gradient */}
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 pt-12 z-10">
-          <div className="flex items-end justify-between">
-            <p className="text-sm font-medium text-white truncate flex-1 mr-2">{displayAddress}</p>
-            {/* Download button for completed videos */}
-            {canPlayVideo && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setMediaKitOpen(true);
-                }}
-                className={cn(
-                  'p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors',
-                  'opacity-0 group-hover:opacity-100',
-                  'focus:outline-none focus:opacity-100'
-                )}
-                aria-label="Download video"
-              >
-                <Download className="w-4 h-4 text-white" />
-              </button>
-            )}
+        {/* Address overlay - bottom with gradient (hidden when progress overlay is shown) */}
+        {!showOverlay && (
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 pt-12 z-10">
+            <div className="flex items-end justify-between">
+              <p className="text-sm font-medium text-white truncate flex-1 mr-2">{displayAddress}</p>
+              {/* Download button for completed videos */}
+              {canPlayVideo && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMediaKitOpen(true);
+                  }}
+                  className={cn(
+                    'p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors',
+                    'opacity-0 group-hover:opacity-100',
+                    'focus:outline-none focus:opacity-100'
+                  )}
+                  aria-label="Download video"
+                >
+                  <Download className="w-4 h-4 text-white" />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Hover border highlight */}
         <div className="absolute inset-0 border-2 border-transparent group-hover:border-gold/50 rounded-xl transition-colors duration-200 pointer-events-none z-10" />
