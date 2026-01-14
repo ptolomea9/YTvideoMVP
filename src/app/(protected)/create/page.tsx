@@ -1,8 +1,10 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ArrowRight, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Sparkles, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { StepIndicator } from "@/components/wizard/step-indicator";
 import { useWizard } from "@/lib/wizard/wizard-context";
@@ -19,24 +21,10 @@ import {
   ScriptStep,
   type ScriptStepHandle,
 } from "@/components/wizard/steps/script-step";
-
-function StyleStepPlaceholder() {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <h2 className="font-heading text-2xl font-semibold text-foreground">
-        Style Options
-      </h2>
-      <p className="mt-2 text-muted-foreground">
-        Customize your video style and voice settings.
-      </p>
-      <div className="mt-8 rounded-lg border border-dashed border-border/50 p-8">
-        <p className="text-sm text-muted-foreground">
-          Style options will be implemented in Plan 02-05
-        </p>
-      </div>
-    </div>
-  );
-}
+import {
+  StyleStep,
+  type StyleStepHandle,
+} from "@/components/wizard/steps/style-step";
 
 /**
  * Animation variants for step transitions.
@@ -66,11 +54,14 @@ const stepVariants = {
  * - Step validation for navigation
  */
 export default function CreatePage() {
-  const { state, nextStep, prevStep, goToStep, canProceed } = useWizard();
+  const router = useRouter();
+  const { state, nextStep, prevStep, goToStep, setSubmitting } = useWizard();
   const { currentStep, completedSteps, isSubmitting } = state;
   const propertyStepRef = useRef<PropertyDataStepHandle>(null);
   const uploadStepRef = useRef<UploadStepHandle>(null);
   const scriptStepRef = useRef<ScriptStepHandle>(null);
+  const styleStepRef = useRef<StyleStepHandle>(null);
+  const [isSubmittingVideo, setIsSubmittingVideo] = useState(false);
 
   const isFirstStep = currentStep === WizardStep.DATA;
   const isLastStep = currentStep === WizardStep.STYLE;
@@ -87,9 +78,60 @@ export default function CreatePage() {
       case WizardStep.SCRIPT:
         return <ScriptStep ref={scriptStepRef} />;
       case WizardStep.STYLE:
-        return <StyleStepPlaceholder />;
+        return <StyleStep ref={styleStepRef} />;
       default:
         return null;
+    }
+  };
+
+  /**
+   * Submit the wizard and create video.
+   */
+  const handleSubmit = async () => {
+    // Validate voice is selected
+    if (!styleStepRef.current?.validate()) {
+      toast.error("Please select a voice before generating your video.");
+      return;
+    }
+
+    const styleData = styleStepRef.current.getStyleData();
+
+    setIsSubmittingVideo(true);
+    setSubmitting(true);
+
+    try {
+      const response = await fetch("/api/listings/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          propertyData: state.propertyData,
+          images: state.images,
+          scriptSections: state.scriptSections,
+          styleOptions: styleData,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to create video");
+      }
+
+      const data = await response.json();
+
+      toast.success("Video creation started!", {
+        description: "Your cinematic tour is being generated. Check your dashboard for progress.",
+      });
+
+      // Redirect to dashboard
+      router.push("/dashboard");
+    } catch (error) {
+      console.error("Submission error:", error);
+      toast.error("Failed to create video", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setIsSubmittingVideo(false);
+      setSubmitting(false);
     }
   };
 
@@ -98,8 +140,7 @@ export default function CreatePage() {
    */
   const handleNext = async () => {
     if (isLastStep) {
-      // TODO: Submit wizard - will be implemented in Plan 02-05
-      console.log("Submit wizard", state);
+      await handleSubmit();
       return;
     }
 
@@ -132,11 +173,9 @@ export default function CreatePage() {
 
   /**
    * Check if Next button should be disabled.
-   * For step 1, we check if the form is valid via ref.
    */
   const isNextDisabled = () => {
-    if (isSubmitting) return true;
-    // For now, allow clicking Next on DATA step - validation happens on click
+    if (isSubmitting || isSubmittingVideo) return true;
     return false;
   };
 
@@ -202,10 +241,17 @@ export default function CreatePage() {
           className="gap-2"
         >
           {isLastStep ? (
-            <>
-              <Sparkles className="h-4 w-4" />
-              Generate Video
-            </>
+            isSubmittingVideo ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Creating Video...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                Generate Video
+              </>
+            )
           ) : (
             <>
               Next

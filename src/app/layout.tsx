@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Bodoni_Moda } from "next/font/google";
+import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 const inter = Inter({
@@ -30,6 +31,7 @@ export default function RootLayout({
         className={`${inter.variable} ${bodoniModa.variable} font-sans antialiased`}
       >
         {children}
+        <Toaster />
       </body>
     </html>
   );

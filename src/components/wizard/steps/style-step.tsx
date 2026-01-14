@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useWizard } from "@/lib/wizard/wizard-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -58,8 +57,6 @@ export interface StyleStepHandle {
 }
 
 export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
-  const { state, dispatch } = useWizard();
-
   // Voice selection state
   const [selectedVoice, setSelectedVoice] = React.useState<SelectedVoice | null>(null);
   const [activeTab, setActiveTab] = React.useState<string>("library");
