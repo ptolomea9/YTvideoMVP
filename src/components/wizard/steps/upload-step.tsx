@@ -2,14 +2,15 @@
 
 import * as React from "react";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
-import { Sparkles, Loader2, GripVertical, Check, Pencil, X } from "lucide-react";
+import { Sparkles, Loader2, GripVertical, Check, Pencil, X, Wand2 } from "lucide-react";
 import { nanoid } from "nanoid";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dropzone, ImagePreviewGrid, type ImagePreview } from "@/components/ui/dropzone";
 import { cn } from "@/lib/utils";
 import { useWizard } from "@/lib/wizard/wizard-context";
-import type { WizardImage, RoomType } from "@/lib/wizard/types";
+import type { WizardImage, RoomType, EnhancementPreset } from "@/lib/wizard/types";
 
 /**
  * Room type labels for display.
@@ -37,6 +38,67 @@ interface AnalyzedImage {
   label: string;
   roomType: RoomType;
   features: string[];
+  enhancement: EnhancementPreset;
+}
+
+/**
+ * Enhancement presets for image processing.
+ */
+const ENHANCEMENT_PRESETS: { value: EnhancementPreset; label: string }[] = [
+  { value: "original", label: "Original" },
+  { value: "golden_hour", label: "Golden Hour" },
+  { value: "hdr", label: "HDR" },
+  { value: "vivid", label: "Vivid" },
+];
+
+/**
+ * EnhanceButton - Progressive disclosure button for image enhancement presets.
+ * Shows on hover, opens popover with preset options on click.
+ */
+function EnhanceButton({
+  currentPreset,
+  onSelect,
+}: {
+  currentPreset: EnhancementPreset;
+  onSelect: (preset: EnhancementPreset) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const isEnhanced = currentPreset !== "original";
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className={cn(
+            "absolute bottom-1 right-1 rounded-full p-1.5 transition-all",
+            "opacity-0 group-hover:opacity-100", // Progressive disclosure
+            isEnhanced
+              ? "bg-primary text-primary-foreground opacity-100" // Always show if enhanced
+              : "bg-background/90 text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Wand2 className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-2" align="end">
+        <div className="flex gap-1">
+          {ENHANCEMENT_PRESETS.map((preset) => (
+            <Button
+              key={preset.value}
+              variant={currentPreset === preset.value ? "default" : "ghost"}
+              size="sm"
+              onClick={() => {
+                onSelect(preset.value);
+                setOpen(false);
+              }}
+            >
+              {preset.label}
+            </Button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 /**
@@ -46,10 +108,11 @@ interface ImageCardProps {
   image: AnalyzedImage;
   onLabelChange: (id: string, label: string) => void;
   onFeaturesChange: (id: string, features: string[]) => void;
+  onEnhancementChange: (id: string, preset: EnhancementPreset) => void;
   onRemove: (id: string) => void;
 }
 
-function ImageCard({ image, onLabelChange, onFeaturesChange, onRemove }: ImageCardProps) {
+function ImageCard({ image, onLabelChange, onFeaturesChange, onEnhancementChange, onRemove }: ImageCardProps) {
   const [isEditingLabel, setIsEditingLabel] = React.useState(false);
   const [isEditingFeatures, setIsEditingFeatures] = React.useState(false);
   const [labelValue, setLabelValue] = React.useState(image.label);
@@ -119,7 +182,7 @@ function ImageCard({ image, onLabelChange, onFeaturesChange, onRemove }: ImageCa
       </div>
 
       {/* Thumbnail */}
-      <div className="relative h-20 w-28 flex-shrink-0 overflow-hidden rounded-md bg-muted">
+      <div className="group relative h-20 w-28 flex-shrink-0 overflow-hidden rounded-md bg-muted">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={image.url}
@@ -130,6 +193,11 @@ function ImageCard({ image, onLabelChange, onFeaturesChange, onRemove }: ImageCa
         <div className="absolute bottom-1 left-1 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-medium text-foreground">
           {ROOM_TYPE_LABELS[image.roomType]}
         </div>
+        {/* Enhancement button - progressive disclosure */}
+        <EnhanceButton
+          currentPreset={image.enhancement}
+          onSelect={(preset) => onEnhancementChange(image.id, preset)}
+        />
       </div>
 
       {/* Label and features */}
@@ -254,7 +322,7 @@ export interface UploadStepHandle {
  */
 export const UploadStep = React.forwardRef<UploadStepHandle>(
   function UploadStep(_, ref) {
-    const { state, addImages, reorderImages } = useWizard();
+    const { state, addImages, reorderImages, updateImageEnhancement } = useWizard();
     const [localImages, setLocalImages] = React.useState<ImagePreview[]>([]);
     const [isAnalyzing, setIsAnalyzing] = React.useState(false);
     const [analyzedImages, setAnalyzedImages] = React.useState<AnalyzedImage[]>([]);
@@ -271,6 +339,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           label: img.label,
           roomType: img.roomType,
           features: img.features,
+          enhancement: img.enhancement,
         }));
         setAnalyzedImages(existingImages);
         setHasBeenAnalyzed(true);
@@ -373,6 +442,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
             label: item.label,
             roomType: item.roomType,
             features: item.features || [],
+            enhancement: "original" as EnhancementPreset,
           })
         );
 
@@ -428,7 +498,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           label: img.label,
           roomType: img.roomType,
           features: img.features,
-          enhancement: "original",
+          enhancement: img.enhancement,
         }));
         reorderImages(wizardImages);
       },
@@ -458,11 +528,29 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           label: img.label,
           roomType: img.roomType,
           features: img.features,
-          enhancement: "original",
+          enhancement: img.enhancement,
         }));
         reorderImages(wizardImages);
       },
       [analyzedImages, reorderImages]
+    );
+
+    /**
+     * Handle enhancement change for an image.
+     */
+    const handleEnhancementChange = React.useCallback(
+      (imageId: string, preset: EnhancementPreset) => {
+        // Update local state
+        setAnalyzedImages((prev) =>
+          prev.map((img) =>
+            img.id === imageId ? { ...img, enhancement: preset } : img
+          )
+        );
+
+        // Update wizard state using the dedicated action
+        updateImageEnhancement(imageId, preset);
+      },
+      [updateImageEnhancement]
     );
 
     /**
@@ -481,7 +569,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           label: img.label,
           roomType: img.roomType,
           features: img.features,
-          enhancement: "original",
+          enhancement: img.enhancement,
         }));
         reorderImages(wizardImages);
       },
@@ -503,7 +591,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           label: img.label,
           roomType: img.roomType,
           features: img.features,
-          enhancement: "original",
+          enhancement: img.enhancement,
         }));
         reorderImages(wizardImages);
       },
@@ -615,6 +703,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
                   image={image}
                   onLabelChange={handleLabelChange}
                   onFeaturesChange={handleFeaturesChange}
+                  onEnhancementChange={handleEnhancementChange}
                   onRemove={handleRemoveAnalyzedImage}
                 />
               ))}
