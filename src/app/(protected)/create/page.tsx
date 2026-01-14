@@ -15,24 +15,10 @@ import {
   UploadStep,
   type UploadStepHandle,
 } from "@/components/wizard/steps/upload-step";
-
-function ScriptStepPlaceholder() {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <h2 className="font-heading text-2xl font-semibold text-foreground">
-        Script Generation
-      </h2>
-      <p className="mt-2 text-muted-foreground">
-        AI-generated narration script for your video.
-      </p>
-      <div className="mt-8 rounded-lg border border-dashed border-border/50 p-8">
-        <p className="text-sm text-muted-foreground">
-          Script editor will be implemented in Plan 02-04
-        </p>
-      </div>
-    </div>
-  );
-}
+import {
+  ScriptStep,
+  type ScriptStepHandle,
+} from "@/components/wizard/steps/script-step";
 
 function StyleStepPlaceholder() {
   return (
@@ -84,6 +70,7 @@ export default function CreatePage() {
   const { currentStep, completedSteps, isSubmitting } = state;
   const propertyStepRef = useRef<PropertyDataStepHandle>(null);
   const uploadStepRef = useRef<UploadStepHandle>(null);
+  const scriptStepRef = useRef<ScriptStepHandle>(null);
 
   const isFirstStep = currentStep === WizardStep.DATA;
   const isLastStep = currentStep === WizardStep.STYLE;
@@ -98,7 +85,7 @@ export default function CreatePage() {
       case WizardStep.UPLOAD:
         return <UploadStep ref={uploadStepRef} />;
       case WizardStep.SCRIPT:
-        return <ScriptStepPlaceholder />;
+        return <ScriptStep ref={scriptStepRef} />;
       case WizardStep.STYLE:
         return <StyleStepPlaceholder />;
       default:
@@ -127,6 +114,13 @@ export default function CreatePage() {
     } else if (currentStep === WizardStep.UPLOAD) {
       if (uploadStepRef.current) {
         const success = await uploadStepRef.current.validate();
+        if (success) {
+          nextStep();
+        }
+      }
+    } else if (currentStep === WizardStep.SCRIPT) {
+      if (scriptStepRef.current) {
+        const success = await scriptStepRef.current.validate();
         if (success) {
           nextStep();
         }
