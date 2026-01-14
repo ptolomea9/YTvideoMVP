@@ -10,25 +10,25 @@ See: .planning/PROJECT.md (updated 2026-01-13)
 ## Current Position
 
 Phase: 2 of 6 (Create Wizard)
-Plan: 4 of 6 in current phase (02-03.1 inserted)
+Plan: 5 of 6 in current phase
 Status: In progress
-Last activity: 2026-01-13 — Inserted 02-03.1 (Image Enhancement)
+Last activity: 2026-01-13 — Completed 02-03.1 (Image Enhancement)
 
-Progress: ████████████████░░░░ 35%
+Progress: ██████████████████░░ 40%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
-- Average duration: 11 min
-- Total execution time: 1.2 hours
+- Total plans completed: 8
+- Average duration: 12 min
+- Total execution time: 1.6 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1. Foundation | 3/3 ✓ | 18 min | 6 min |
-| 2. Create Wizard | 4/5 | 54 min | 14 min |
+| 2. Create Wizard | 5/6 | 78 min | 16 min |
 
 **Recent Trend:**
 - Last 5 plans: 2m, 4m, 12m, 8m, 12m
@@ -55,7 +55,11 @@ Recent decisions affecting current work:
 - Images have editable label + editable features/description for script generation
 - Section-based script (5 sections) instead of per-image scripts for cohesive narrative
 - Agent phone/social optional fields feed into closing section CTA
-- Per-image enhancement presets (Golden Hour, HDR, Vivid) via Kie.ai with progressive disclosure UI
+- Per-image enhancement presets (Golden Hour, HDR, Vivid, Sunset Sky) via Kie.ai with progressive disclosure UI
+- Hybrid preview: CSS filters for instant feedback, API call only on "Apply"
+- Sunset Sky as premium option (AI-only, no CSS preview possible)
+- Enhancement URL caching to avoid regeneration when switching presets
+- Before/after comparison slider for applied enhancements
 
 ### Deferred Issues
 
@@ -68,5 +72,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-13
-Stopped at: Completed 02-04-PLAN.md (Script HITL Editor)
+Stopped at: Completed 02-03.1-PLAN.md (Image Enhancement Presets)
+Next up: 02-05 (Step 4 - Voice/music/MLS options)
 Resume file: None
