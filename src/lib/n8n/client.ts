@@ -23,7 +23,7 @@ export const N8N_WORKFLOWS = {
   },
   youtubeVideo: {
     id: "Qo2sirL0cDI2fVNQMJ5Eq",
-    webhookPath: "f8982d9e-51cb-462b-a319-8d6e98a92f6d",
+    webhookPath: "db085427-02a1-4f47-9934-9c258aa929b3",
     name: "Youtube Video",
   },
 } as const;

@@ -67,7 +67,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "f8982d9e-51cb-462b-a319-8d6e98a92f6d",
+        "path": "db085427-02a1-4f47-9934-9c258aa929b3",
         "options": {}
       },
       "type": "n8n-nodes-base.webhook",
@@ -78,7 +78,7 @@
       ],
       "id": "4206ec00-f33b-4eb9-8cc1-0db4c662ac66",
       "name": "Webhook",
-      "webhookId": "f8982d9e-51cb-462b-a319-8d6e98a92f6d"
+      "webhookId": "db085427-02a1-4f47-9934-9c258aa929b3"
     },
     {
       "parameters": {
@@ -328,18 +328,34 @@
     },
     {
       "parameters": {
-        "resource": "speech",
-        "voice": {
-          "__rl": true,
-          "value": "={{ $('Webhook').first().json.body[0].voiceId }}",
-          "mode": "id"
+        "method": "POST",
+        "url": "=https://api.elevenlabs.io/v1/text-to-speech/{{ $('Webhook').first().json.body[0].voiceId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "xi-api-key",
+              "value": "={{ $env.ELEVENLABS_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
         },
-        "text": "={{ $json.text }}",
-        "additionalOptions": {},
-        "requestOptions": {}
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text, model_id: 'eleven_multilingual_v2' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
       },
-      "type": "@elevenlabs/n8n-nodes-elevenlabs.elevenLabs",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         36528,
         14368
@@ -613,13 +629,28 @@
     },
     {
       "parameters": {
-        "operation": "upload",
-        "bucketName": "voice-elven-lab-audio",
-        "fileName": "=audio_{{ $itemIndex }}_{{ $now.toFormat('yyyyMMdd_HHmmss') }}.mp3",
-        "additionalFields": {}
+        "method": "POST",
+        "url": "={{ $env.N8N_APP_CALLBACK_URL || 'https://your-app.vercel.app' }}/api/audio/upload",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "audio/mpeg"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_WEBHOOK_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {}
       },
-      "type": "n8n-nodes-base.awsS3",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         36752,
         14368
@@ -630,7 +661,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://backend.edgeairealty.com/api/audio/duration",
+        "url": "={{ $env.N8N_APP_CALLBACK_URL || 'https://your-app.vercel.app' }}/api/audio/duration",
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
