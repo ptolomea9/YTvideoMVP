@@ -78,7 +78,7 @@ export default async function DashboardPage() {
 
       {/* Video grid or empty state */}
       {typedVideos.length > 0 ? (
-        <VideoGallery videos={typedVideos} />
+        <VideoGallery initialVideos={typedVideos} userId={user?.id || ''} />
       ) : (
         <EmptyState />
       )}
