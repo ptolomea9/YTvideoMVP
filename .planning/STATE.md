@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-13)
 ## Current Position
 
 Phase: 2 of 6 (Create Wizard)
-Plan: 4 of 5 in current phase
+Plan: 4 of 6 in current phase (02-03.1 inserted)
 Status: In progress
-Last activity: 2026-01-13 — Completed 02-04-PLAN.md (Script HITL Editor)
+Last activity: 2026-01-13 — Inserted 02-03.1 (Image Enhancement)
 
-Progress: ████████████████░░░░ 38%
+Progress: ████████████████░░░░ 35%
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Recent decisions affecting current work:
 - Images have editable label + editable features/description for script generation
 - Section-based script (5 sections) instead of per-image scripts for cohesive narrative
 - Agent phone/social optional fields feed into closing section CTA
+- Per-image enhancement presets (Golden Hour, HDR, Vivid) via Kie.ai with progressive disclosure UI
 
 ### Deferred Issues
 

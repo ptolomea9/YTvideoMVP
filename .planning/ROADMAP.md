@@ -46,6 +46,7 @@ Plans:
 - [x] 02-01: Wizard shell and step navigation ✓
 - [x] 02-02: Step 1 - Property data input + neighborhood POI ✓
 - [x] 02-03: Step 2 - Image upload with GPT-4o Vision sorting ✓
+- [ ] 02-03.1: Step 2 enhancement - Per-image enhancement presets via Kie.ai (INSERTED)
 - [x] 02-04: Step 3 - Script HITL editor (5 editable sections) ✓
 - [ ] 02-05: Step 4 - Voice/music/MLS options
 
@@ -108,7 +109,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/3 | ✓ Complete | 2026-01-13 |
-| 2. Create Wizard | 4/5 | In progress | - |
+| 2. Create Wizard | 4/6 | In progress | - |
 | 3. n8n Integration | 0/7 | Not started | - |
 | 4. Dashboard | 0/4 | Not started | - |
 | 5. Payments | 0/3 | Not started | - |

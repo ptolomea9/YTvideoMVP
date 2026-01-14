@@ -24,6 +24,7 @@ A high-end SaaS platform that transforms static real estate photos into cinemati
 **Create Wizard (/create)**
 - [ ] Step 1 - Data: Address, price, property specs input + Neighborhood POI fetch
 - [ ] Step 2 - Upload: Drag-and-drop images with GPT-4o Vision smart sorting (Exterior → Entry → Living → Bed → Bath → Yard)
+- [ ] Step 2 - Enhance: Optional per-image enhancement presets (Golden Hour, HDR, Vivid) via Kie.ai — non-intrusive, progressive disclosure UI
 - [ ] Step 3 - Script (HITL): 5 editable text areas with AI-generated script parts (MVP-critical)
 - [ ] Step 4 - Style: Voice selection, music toggle, MLS dual-output toggle
 
