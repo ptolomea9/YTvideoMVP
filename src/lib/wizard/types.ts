@@ -197,10 +197,10 @@ export type WizardAction =
  * Validation constants for video generation requirements.
  */
 export const WIZARD_VALIDATION = {
-  /** Minimum images required (one per script section) */
+  /** Minimum images required for video variety */
   MIN_IMAGES: 5,
   /** Maximum images allowed */
-  MAX_IMAGES: 20,
+  MAX_IMAGES: 15,
   /** Minimum characters per script section to avoid awkward TTS timing */
   MIN_SECTION_CHARS: 50,
   /** Target words per section for optimal narration */

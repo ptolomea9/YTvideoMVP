@@ -832,20 +832,18 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           return false;
         }
 
-        // Check minimum image count
+        // Check minimum image count (simple validation - no per-section requirements)
         if (analyzedImages.length < WIZARD_VALIDATION.MIN_IMAGES) {
           setAnalyzeError(
-            `Please upload at least ${WIZARD_VALIDATION.MIN_IMAGES} images (you have ${analyzedImages.length}). Each script section needs images to display.`
+            `Please upload at least ${WIZARD_VALIDATION.MIN_IMAGES} images (you have ${analyzedImages.length}).`
           );
           return false;
         }
 
-        // Check for missing sections
-        const missing = getMissingSections(analyzedImages);
-        if (missing.length > 0) {
-          const missingLabels = missing.map((s) => s.label).join(", ");
+        // Check maximum image count
+        if (analyzedImages.length > WIZARD_VALIDATION.MAX_IMAGES) {
           setAnalyzeError(
-            `Missing photos for: ${missingLabels}. Add at least one photo for each section to continue.`
+            `Maximum ${WIZARD_VALIDATION.MAX_IMAGES} images allowed (you have ${analyzedImages.length}). Please remove some images.`
           );
           return false;
         }
@@ -865,7 +863,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
       }));
       setLocalImages((prev) => {
         const combined = [...prev, ...newImages];
-        return combined.slice(0, 20);
+        return combined.slice(0, WIZARD_VALIDATION.MAX_IMAGES);
       });
       setAnalyzedImages([]);
       setHasBeenAnalyzed(false);
@@ -1245,7 +1243,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
             <Dropzone
               onFilesAdded={handleFilesAdded}
               accept="image/*"
-              maxFiles={20}
+              maxFiles={WIZARD_VALIDATION.MAX_IMAGES}
               maxSize={10 * 1024 * 1024}
               disabled={isAnalyzing}
             />
