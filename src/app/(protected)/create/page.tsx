@@ -11,27 +11,10 @@ import {
   PropertyDataStep,
   type PropertyDataStepHandle,
 } from "@/components/wizard/steps/property-data-step";
-
-/**
- * Step placeholder components - Will be replaced in subsequent plans.
- */
-function UploadStepPlaceholder() {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <h2 className="font-heading text-2xl font-semibold text-foreground">
-        Photo Upload
-      </h2>
-      <p className="mt-2 text-muted-foreground">
-        Upload your property photos for the video tour.
-      </p>
-      <div className="mt-8 rounded-lg border border-dashed border-border/50 p-8">
-        <p className="text-sm text-muted-foreground">
-          Image upload component will be implemented in Plan 02-03
-        </p>
-      </div>
-    </div>
-  );
-}
+import {
+  UploadStep,
+  type UploadStepHandle,
+} from "@/components/wizard/steps/upload-step";
 
 function ScriptStepPlaceholder() {
   return (
@@ -100,6 +83,7 @@ export default function CreatePage() {
   const { state, nextStep, prevStep, goToStep, canProceed } = useWizard();
   const { currentStep, completedSteps, isSubmitting } = state;
   const propertyStepRef = useRef<PropertyDataStepHandle>(null);
+  const uploadStepRef = useRef<UploadStepHandle>(null);
 
   const isFirstStep = currentStep === WizardStep.DATA;
   const isLastStep = currentStep === WizardStep.STYLE;
@@ -112,7 +96,7 @@ export default function CreatePage() {
       case WizardStep.DATA:
         return <PropertyDataStep ref={propertyStepRef} />;
       case WizardStep.UPLOAD:
-        return <UploadStepPlaceholder />;
+        return <UploadStep ref={uploadStepRef} />;
       case WizardStep.SCRIPT:
         return <ScriptStepPlaceholder />;
       case WizardStep.STYLE:
@@ -136,6 +120,13 @@ export default function CreatePage() {
     if (currentStep === WizardStep.DATA) {
       if (propertyStepRef.current) {
         const success = await propertyStepRef.current.submitForm();
+        if (success) {
+          nextStep();
+        }
+      }
+    } else if (currentStep === WizardStep.UPLOAD) {
+      if (uploadStepRef.current) {
+        const success = await uploadStepRef.current.validate();
         if (success) {
           nextStep();
         }
