@@ -133,6 +133,7 @@ export interface ImageTiming {
  * Payload format expected by the Tour Video n8n workflow.
  */
 export interface N8nTourVideoPayload {
+  videoId?: string; // Video UUID for completion callback
   images: Array<{ imageurl: string }>;
   imageTiming?: ImageTiming[]; // Beat-synced timings (optional, for json2video)
   email: string;

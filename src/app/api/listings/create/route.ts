@@ -173,8 +173,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // Add video ID to payload for completion callback
+    const payloadWithVideoId = {
+      ...n8nPayload,
+      videoId: video.id,
+    };
+
     // Trigger n8n Youtube Video workflow
-    const webhookResponse = await triggerYoutubeVideo(n8nPayload, {
+    const webhookResponse = await triggerYoutubeVideo(payloadWithVideoId, {
       isTest: process.env.NODE_ENV !== "production",
     });
 
