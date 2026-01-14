@@ -16,7 +16,7 @@ import {
 import { Dropzone, ImagePreviewGrid, type ImagePreview } from "@/components/ui/dropzone";
 import { cn } from "@/lib/utils";
 import { useWizard } from "@/lib/wizard/wizard-context";
-import type { WizardImage, RoomType, EnhancementPreset, EnhancementStatus } from "@/lib/wizard/types";
+import type { WizardImage, RoomType, EnhancementPreset, EnhancementStatus, EnhancedUrlCache } from "@/lib/wizard/types";
 
 /**
  * Room type labels for display.
@@ -46,30 +46,46 @@ interface AnalyzedImage {
   features: string[];
   enhancement: EnhancementPreset;
   enhancementStatus: EnhancementStatus;
-  enhancedUrl?: string;
+  enhancedUrls: EnhancedUrlCache;
 }
 
 /**
  * CSS filter classes for enhancement previews.
+ * Note: sunset_sky has no CSS filter - it requires AI to isolate the sky.
  */
 const ENHANCEMENT_FILTER_CLASSES: Record<EnhancementPreset, string> = {
   original: "",
   golden_hour: "enhancement-golden-hour",
-  sunset_sky: "enhancement-sunset-sky",
+  sunset_sky: "", // No CSS preview possible - sky isolation requires AI
   hdr: "enhancement-hdr",
   vivid: "enhancement-vivid",
 };
 
 /**
- * Enhancement presets for image processing.
+ * Standard enhancement presets (CSS-previewable).
  */
-const ENHANCEMENT_PRESETS: { value: EnhancementPreset; label: string; description?: string }[] = [
+const STANDARD_PRESETS: { value: EnhancementPreset; label: string; description?: string }[] = [
   { value: "original", label: "Original" },
-  { value: "golden_hour", label: "Golden Hour", description: "Warm tint on entire image" },
-  { value: "sunset_sky", label: "Sunset Sky", description: "Replace sky only" },
-  { value: "hdr", label: "HDR", description: "Enhanced details & contrast" },
-  { value: "vivid", label: "Vivid", description: "Saturated colors" },
+  { value: "golden_hour", label: "Golden Hour", description: "Warm sunset lighting" },
+  { value: "hdr", label: "HDR", description: "Enhanced details" },
+  { value: "vivid", label: "Vivid", description: "Rich colors" },
 ];
+
+/**
+ * Premium enhancement preset (AI sky replacement).
+ */
+const PREMIUM_PRESET = {
+  value: "sunset_sky" as EnhancementPreset,
+  label: "Sunset Sky",
+  description: "AI replaces overcast sky with golden sunset",
+};
+
+/**
+ * Check if a preset has CSS preview capability.
+ */
+const hasCssPreview = (preset: EnhancementPreset): boolean => {
+  return preset !== "sunset_sky" && preset !== "original";
+};
 
 /**
  * EnhanceButton - Progressive disclosure button for image enhancement presets.
@@ -79,6 +95,7 @@ const ENHANCEMENT_PRESETS: { value: EnhancementPreset; label: string; descriptio
 function EnhanceButton({
   currentPreset,
   status,
+  hasCachedUrl,
   onSelect,
   onApply,
   onRevert,
@@ -86,6 +103,7 @@ function EnhanceButton({
 }: {
   currentPreset: EnhancementPreset;
   status: EnhancementStatus;
+  hasCachedUrl: boolean;
   onSelect: (preset: EnhancementPreset) => void;
   onApply: () => void;
   onRevert: () => void;
@@ -95,6 +113,7 @@ function EnhanceButton({
   const isPreviewing = status === "previewing";
   const isApplied = status === "applied";
   const hasEnhancement = currentPreset !== "original";
+  const isSunsetSky = currentPreset === "sunset_sky";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -118,33 +137,63 @@ function EnhanceButton({
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-3" align="end">
-        <div className="flex flex-col gap-2">
-          {/* Preset selection */}
-          <div className="flex gap-1">
-            {ENHANCEMENT_PRESETS.map((preset) => (
-              <Button
-                key={preset.value}
-                variant={currentPreset === preset.value ? "default" : "ghost"}
-                size="sm"
-                onClick={() => {
-                  onSelect(preset.value);
-                  if (preset.value === "original") {
-                    setOpen(false);
-                  }
-                }}
-                disabled={isApplying}
-              >
-                {preset.label}
-              </Button>
-            ))}
+      <PopoverContent className="w-64 p-3" align="end">
+        <div className="flex flex-col gap-3">
+          {/* Standard preset selection */}
+          <div>
+            <div className="mb-1.5 text-xs font-medium text-muted-foreground">Filters</div>
+            <div className="flex flex-wrap gap-1">
+              {STANDARD_PRESETS.map((preset) => (
+                <Button
+                  key={preset.value}
+                  variant={currentPreset === preset.value ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => {
+                    onSelect(preset.value);
+                    if (preset.value === "original") {
+                      setOpen(false);
+                    }
+                  }}
+                  disabled={isApplying}
+                  className="text-xs"
+                >
+                  {preset.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Premium Sunset Sky option */}
+          <div className="border-t pt-3">
+            <div className="mb-1.5 flex items-center gap-1.5">
+              <Sparkles className="h-3 w-3 text-primary" />
+              <span className="text-xs font-medium text-primary">Premium</span>
+            </div>
+            <Button
+              variant={isSunsetSky ? "default" : "outline"}
+              size="sm"
+              onClick={() => onSelect(PREMIUM_PRESET.value)}
+              disabled={isApplying}
+              className={cn(
+                "w-full justify-start gap-2",
+                isSunsetSky && "bg-primary"
+              )}
+            >
+              <span>{PREMIUM_PRESET.label}</span>
+              {hasCachedUrl && isSunsetSky && (
+                <span className="ml-auto text-[10px] opacity-70">cached</span>
+              )}
+            </Button>
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              {PREMIUM_PRESET.description}
+            </p>
           </div>
 
           {/* Apply/Revert actions */}
           {isPreviewing && (
             <div className="flex items-center justify-between border-t pt-2">
               <span className="text-xs text-muted-foreground">
-                CSS preview — click Apply for full quality
+                {isSunsetSky ? "No preview — AI required" : "CSS preview active"}
               </span>
               <Button
                 size="sm"
@@ -214,6 +263,12 @@ function ImagePreviewDialog({
 }) {
   const isPreviewing = image.enhancementStatus === "previewing";
   const isApplied = image.enhancementStatus === "applied";
+  const isSunsetSky = image.enhancement === "sunset_sky";
+
+  // Get current enhanced URL from cache
+  const currentEnhancedUrl = image.enhancement !== "original"
+    ? image.enhancedUrls?.[image.enhancement]
+    : undefined;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -234,28 +289,32 @@ function ImagePreviewDialog({
         <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={image.enhancedUrl || image.url}
+            src={currentEnhancedUrl || image.url}
             alt={image.label}
             className={cn(
               "h-full w-full object-contain transition-all duration-300",
+              // Only apply CSS filter for non-sunset_sky presets when previewing
               image.enhancementStatus === "previewing" &&
+                hasCssPreview(image.enhancement) &&
                 ENHANCEMENT_FILTER_CLASSES[image.enhancement]
             )}
           />
           {isPreviewing && (
             <div className="absolute bottom-3 left-3 rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground">
-              CSS Preview — select Apply for full quality
+              {isSunsetSky
+                ? "No preview available — AI sky replacement required"
+                : "CSS Preview — select Apply for full quality"}
             </div>
           )}
         </div>
 
         {/* Enhancement controls */}
         <div className="flex flex-col gap-3">
-          {/* Preset selection */}
+          {/* Standard preset selection */}
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Enhancement:</span>
+            <span className="text-sm text-muted-foreground">Filters:</span>
             <div className="flex gap-1">
-              {ENHANCEMENT_PRESETS.map((preset) => (
+              {STANDARD_PRESETS.map((preset) => (
                 <Button
                   key={preset.value}
                   variant={image.enhancement === preset.value ? "default" : "outline"}
@@ -269,12 +328,37 @@ function ImagePreviewDialog({
             </div>
           </div>
 
+          {/* Premium Sunset Sky option */}
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1 text-sm text-primary">
+              <Sparkles className="h-3 w-3" />
+              Premium:
+            </span>
+            <Button
+              variant={isSunsetSky ? "default" : "outline"}
+              size="sm"
+              onClick={() => onSelect(PREMIUM_PRESET.value)}
+              disabled={isApplying}
+              className="gap-2"
+            >
+              {PREMIUM_PRESET.label}
+              {image.enhancedUrls?.sunset_sky && (
+                <span className="text-[10px] opacity-70">(cached)</span>
+              )}
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {PREMIUM_PRESET.description}
+            </span>
+          </div>
+
           {/* Apply/Revert actions */}
           <div className="flex items-center justify-between border-t pt-3">
             {isPreviewing && (
               <>
                 <span className="text-sm text-muted-foreground">
-                  Preview shows CSS approximation. Apply to get full AI enhancement.
+                  {isSunsetSky
+                    ? "Click Apply to generate AI sky replacement."
+                    : "Preview shows CSS approximation. Apply for full AI enhancement."}
                 </span>
                 <Button onClick={onApply} disabled={isApplying}>
                   {isApplying ? (
@@ -408,17 +492,34 @@ function ImageCard({
 
       {/* Thumbnail */}
       <div className="group relative h-20 w-28 flex-shrink-0 overflow-hidden rounded-md bg-muted">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={image.enhancedUrl || image.url}
-          alt={image.label}
-          className={cn(
-            "h-full w-full object-cover transition-all duration-300",
-            // Apply CSS filter when previewing (not applied yet)
-            image.enhancementStatus === "previewing" &&
-              ENHANCEMENT_FILTER_CLASSES[image.enhancement]
-          )}
-        />
+        {/* Get enhanced URL from cache for current preset */}
+        {(() => {
+          const currentEnhancedUrl = image.enhancement !== "original"
+            ? image.enhancedUrls?.[image.enhancement]
+            : undefined;
+          const isSunsetSky = image.enhancement === "sunset_sky";
+          const showCssFilter = image.enhancementStatus === "previewing" && hasCssPreview(image.enhancement);
+
+          return (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={currentEnhancedUrl || image.url}
+                alt={image.label}
+                className={cn(
+                  "h-full w-full object-cover transition-all duration-300",
+                  showCssFilter && ENHANCEMENT_FILTER_CLASSES[image.enhancement]
+                )}
+              />
+              {/* "No preview" badge for Sunset Sky when previewing */}
+              {isSunsetSky && image.enhancementStatus === "previewing" && (
+                <div className="absolute top-1 left-1 rounded bg-primary/90 px-1 py-0.5 text-[8px] font-medium text-primary-foreground">
+                  AI Only
+                </div>
+              )}
+            </>
+          );
+        })()}
         {/* Room type badge */}
         <div className="absolute bottom-1 left-1 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-medium text-foreground">
           {ROOM_TYPE_LABELS[image.roomType]}
@@ -438,6 +539,7 @@ function ImageCard({
         <EnhanceButton
           currentPreset={image.enhancement}
           status={image.enhancementStatus}
+          hasCachedUrl={!!image.enhancedUrls?.[image.enhancement === "original" ? "golden_hour" : image.enhancement]}
           onSelect={(preset) => onEnhancementChange(image.id, preset)}
           onApply={() => onApplyEnhancement(image.id)}
           onRevert={() => onRevertEnhancement(image.id)}
@@ -606,7 +708,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           features: img.features,
           enhancement: img.enhancement,
           enhancementStatus: img.enhancementStatus,
-          enhancedUrl: img.enhancedUrl,
+          enhancedUrls: img.enhancedUrls,
         }));
         setAnalyzedImages(existingImages);
         setHasBeenAnalyzed(true);
@@ -711,6 +813,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
             features: item.features || [],
             enhancement: "original" as EnhancementPreset,
             enhancementStatus: "idle" as EnhancementStatus,
+            enhancedUrls: {},
           })
         );
 
@@ -728,6 +831,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           features: img.features,
           enhancement: "original",
           enhancementStatus: "idle",
+          enhancedUrls: {},
         }));
         addImages(wizardImages);
 
@@ -769,7 +873,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           features: img.features,
           enhancement: img.enhancement,
           enhancementStatus: img.enhancementStatus,
-          enhancedUrl: img.enhancedUrl,
+          enhancedUrls: img.enhancedUrls,
         }));
         reorderImages(wizardImages);
       },
@@ -801,7 +905,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           features: img.features,
           enhancement: img.enhancement,
           enhancementStatus: img.enhancementStatus,
-          enhancedUrl: img.enhancedUrl,
+          enhancedUrls: img.enhancedUrls,
         }));
         reorderImages(wizardImages);
       },
@@ -809,23 +913,30 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
     );
 
     /**
-     * Handle enhancement preset change for an image (CSS preview).
+     * Handle enhancement preset change for an image.
+     * Uses cached URL if available, otherwise shows CSS preview.
      */
     const handleEnhancementChange = React.useCallback(
       (imageId: string, preset: EnhancementPreset) => {
-        // Update local state with preview status
+        // Update local state - check for cached URL
         setAnalyzedImages((prev) =>
-          prev.map((img) =>
-            img.id === imageId
-              ? {
-                  ...img,
-                  enhancement: preset,
-                  enhancementStatus: preset === "original" ? "idle" : "previewing",
-                  // Clear enhanced URL if changing preset (need to re-apply)
-                  enhancedUrl: preset === "original" ? undefined : img.enhancedUrl,
-                }
-              : img
-          )
+          prev.map((img) => {
+            if (img.id !== imageId) return img;
+
+            // Check if we have a cached URL for this preset
+            const cachedUrl = preset !== "original" ? img.enhancedUrls?.[preset] : undefined;
+
+            return {
+              ...img,
+              enhancement: preset,
+              // If cached URL exists, go directly to "applied"
+              enhancementStatus: preset === "original"
+                ? "idle"
+                : cachedUrl
+                  ? "applied"
+                  : "previewing",
+            };
+          })
         );
 
         // Update wizard state using the dedicated action
@@ -842,6 +953,8 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
         const image = analyzedImages.find((img) => img.id === imageId);
         if (!image || image.enhancement === "original") return;
 
+        const preset = image.enhancement;
+
         setApplyingEnhancementId(imageId);
         setEnhancementStatus(imageId, "applying");
 
@@ -851,7 +964,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               imageUrl: image.url,
-              preset: image.enhancement,
+              preset: preset,
             }),
           });
 
@@ -868,17 +981,21 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
 
           const { enhancedUrl } = await response.json();
 
-          // Update local state
+          // Update local state with cached URL
           setAnalyzedImages((prev) =>
             prev.map((img) =>
               img.id === imageId
-                ? { ...img, enhancedUrl, enhancementStatus: "applied" }
+                ? {
+                    ...img,
+                    enhancedUrls: { ...img.enhancedUrls, [preset]: enhancedUrl },
+                    enhancementStatus: "applied",
+                  }
                 : img
             )
           );
 
-          // Update wizard state
-          setEnhancedUrl(imageId, enhancedUrl);
+          // Update wizard state with preset-specific cache
+          setEnhancedUrl(imageId, preset, enhancedUrl);
         } catch (error) {
           console.error("Enhancement error:", error);
           setEnhancementStatus(imageId, "error");
@@ -902,10 +1019,11 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
 
     /**
      * Handle reverting enhancement to original.
+     * Keeps cache intact so user can re-select without regenerating.
      */
     const handleRevertEnhancement = React.useCallback(
       (imageId: string) => {
-        // Update local state
+        // Update local state - keep enhancedUrls cache intact
         setAnalyzedImages((prev) =>
           prev.map((img) =>
             img.id === imageId
@@ -913,7 +1031,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
                   ...img,
                   enhancement: "original",
                   enhancementStatus: "idle",
-                  enhancedUrl: undefined,
+                  // Don't clear enhancedUrls - allows re-selecting without regenerating
                 }
               : img
           )
@@ -943,7 +1061,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           features: img.features,
           enhancement: img.enhancement,
           enhancementStatus: img.enhancementStatus,
-          enhancedUrl: img.enhancedUrl,
+          enhancedUrls: img.enhancedUrls,
         }));
         reorderImages(wizardImages);
       },
@@ -967,7 +1085,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           features: img.features,
           enhancement: img.enhancement,
           enhancementStatus: img.enhancementStatus,
-          enhancedUrl: img.enhancedUrl,
+          enhancedUrls: img.enhancedUrls,
         }));
         reorderImages(wizardImages);
       },

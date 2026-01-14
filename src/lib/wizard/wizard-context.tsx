@@ -93,23 +93,30 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
         error: null,
       };
 
-    case "UPDATE_IMAGE_ENHANCEMENT":
+    case "UPDATE_IMAGE_ENHANCEMENT": {
+      const preset = action.payload.preset;
       return {
         ...state,
-        images: state.images.map((img) =>
-          img.id === action.payload.imageId
-            ? {
-                ...img,
-                enhancement: action.payload.preset,
-                // Set to previewing if selecting a preset, idle if reverting to original
-                enhancementStatus: action.payload.preset === "original" ? "idle" : "previewing",
-                // Clear enhanced URL when changing presets
-                enhancedUrl: action.payload.preset === "original" ? undefined : img.enhancedUrl,
-              }
-            : img
-        ),
+        images: state.images.map((img) => {
+          if (img.id !== action.payload.imageId) return img;
+
+          // Check if we have a cached URL for this preset
+          const cachedUrl = preset !== "original" ? img.enhancedUrls?.[preset] : undefined;
+
+          return {
+            ...img,
+            enhancement: preset,
+            // If cached URL exists, go directly to "applied"; otherwise preview (or idle for original)
+            enhancementStatus: preset === "original"
+              ? "idle"
+              : cachedUrl
+                ? "applied"
+                : "previewing",
+          };
+        }),
         error: null,
       };
+    }
 
     case "SET_ENHANCEMENT_STATUS":
       return {
@@ -129,7 +136,11 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
           img.id === action.payload.imageId
             ? {
                 ...img,
-                enhancedUrl: action.payload.enhancedUrl,
+                // Store in cache at the specific preset key
+                enhancedUrls: {
+                  ...img.enhancedUrls,
+                  [action.payload.preset]: action.payload.enhancedUrl,
+                },
                 enhancementStatus: "applied" as EnhancementStatus,
               }
             : img
@@ -146,7 +157,7 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
                 ...img,
                 enhancement: "original",
                 enhancementStatus: "idle",
-                enhancedUrl: undefined,
+                // Keep enhancedUrls cache intact - allows reselecting without regenerating
               }
             : img
         ),
@@ -213,7 +224,7 @@ interface WizardContextValue {
   reorderImages: (images: WizardImage[]) => void;
   updateImageEnhancement: (imageId: string, preset: EnhancementPreset) => void;
   setEnhancementStatus: (imageId: string, status: EnhancementStatus) => void;
-  setEnhancedUrl: (imageId: string, enhancedUrl: string) => void;
+  setEnhancedUrl: (imageId: string, preset: Exclude<EnhancementPreset, "original">, enhancedUrl: string) => void;
   revertEnhancement: (imageId: string) => void;
   updateScript: (sections: ScriptSection[]) => void;
   updateScriptSection: (section: ScriptSection) => void;
@@ -280,10 +291,10 @@ export function WizardProvider({ children }: { children: ReactNode }) {
     []
   );
   const setEnhancedUrl = useCallback(
-    (imageId: string, enhancedUrl: string) =>
+    (imageId: string, preset: Exclude<EnhancementPreset, "original">, enhancedUrl: string) =>
       dispatch({
         type: "SET_ENHANCED_URL",
-        payload: { imageId, enhancedUrl },
+        payload: { imageId, preset, enhancedUrl },
       }),
     []
   );

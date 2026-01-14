@@ -81,6 +81,12 @@ export type EnhancementStatus =
   | "error";        // Enhancement failed
 
 /**
+ * Cache of enhanced URLs per preset.
+ * Allows switching between presets without regenerating.
+ */
+export type EnhancedUrlCache = Partial<Record<Exclude<EnhancementPreset, "original">, string>>;
+
+/**
  * Image data after upload (Step 2 - UPLOAD).
  * Uses URL strings instead of File objects to keep state serializable.
  */
@@ -94,7 +100,7 @@ export interface WizardImage {
   features: string[];               // Notable features for script generation
   enhancement: EnhancementPreset;   // Image enhancement preset (default: 'original')
   enhancementStatus: EnhancementStatus;  // Status of enhancement (default: 'idle')
-  enhancedUrl?: string;             // URL of Kie.ai enhanced image (if applied)
+  enhancedUrls: EnhancedUrlCache;   // Cache of enhanced URLs per preset (persists across reverts)
 }
 
 /**
@@ -161,7 +167,7 @@ export type WizardAction =
   | { type: "REORDER_IMAGES"; payload: WizardImage[] }
   | { type: "UPDATE_IMAGE_ENHANCEMENT"; payload: { imageId: string; preset: EnhancementPreset } }
   | { type: "SET_ENHANCEMENT_STATUS"; payload: { imageId: string; status: EnhancementStatus } }
-  | { type: "SET_ENHANCED_URL"; payload: { imageId: string; enhancedUrl: string } }
+  | { type: "SET_ENHANCED_URL"; payload: { imageId: string; preset: Exclude<EnhancementPreset, "original">; enhancedUrl: string } }
   | { type: "REVERT_ENHANCEMENT"; payload: { imageId: string } }
   | { type: "UPDATE_SCRIPT"; payload: ScriptSection[] }
   | { type: "UPDATE_SCRIPT_SECTION"; payload: ScriptSection }
