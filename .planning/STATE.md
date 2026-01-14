@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-13)
 ## Current Position
 
 Phase: 3 of 6 (n8n Integration)
-Plan: 3 of 7 in current phase (03-03 complete)
-Status: Ready for 03-04
-Last activity: 2026-01-13 — Completed 03-03 (Kie.ai image resize - verified existing workflow)
+Plan: 4 of 7 in current phase (03-04 complete)
+Status: In progress
+Last activity: 2026-01-14 — Completed 03-04 (Script integration - wizard scripts bypass GPT)
 
-Progress: ██████████████████████████░░░░ 58%
+Progress: ███████████████░░░░░░░░░░░░░░░ 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
+- Total plans completed: 13
 - Average duration: 12 min
-- Total execution time: 2.4 hours
+- Total execution time: 2.6 hours
 
 **By Phase:**
 
@@ -29,11 +29,11 @@ Progress: ███████████████████████�
 |-------|-------|-------|----------|
 | 1. Foundation | 3/3 ✓ | 18 min | 6 min |
 | 2. Create Wizard | 6/6 ✓ | 102 min | 17 min |
-| 3. n8n Integration | 3/7 | 24 min | 8 min |
+| 3. n8n Integration | 4/7 | 36 min | 9 min |
 
 **Recent Trend:**
-- Last 5 plans: 8m, 12m, 24m, 12m, 5m
-- Trend: Fast (verification-only plans)
+- Last 5 plans: 12m, 24m, 12m, 5m, 12m
+- Trend: Fast (n8n MCP automation)
 
 ## Accumulated Context
 
@@ -74,10 +74,14 @@ Recent decisions affecting current work:
 - Beat data stored in music_tracks table: bass_hits[], snare_hits[], beats[], bpm
 - **Youtube Video workflow** (hjG60LIO86i5vxX3) is target, Tour Video/Listing Video were references
 - Youtube Video expects array-wrapped payload: `[payload]` → `body[0]`
+- **Beat-sync in lulls only**: Snare-hit transitions happen during gaps between narration sections (not during voice). 4 lulls = 4 beat-synced section transitions. Within sections, soft crossfades between images.
+- **Images map to script sections**: GPT-4o room labels determine which images play during which narration section (exterior→hook, entry→first impression, living/kitchen→interior, bed/bath→features, yard→closing)
+- **Wizard validation minimums**: Min 5 images (one per section), min 50 chars per script section (for proper TTS timing). Fallback logic reuses images when sections lack matching room types.
+- **Script routing in n8n**: Wizard-provided scripts (webhookResponse) bypass GPT generation and route directly to ElevenLabs TTS. Payloads without webhookResponse fall back to GPT flow.
 
 ### Deferred Issues
 
-None yet.
+None currently.
 
 ### Blockers/Concerns
 
@@ -85,7 +89,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-01-13
-Stopped at: Completed 03-03 (Kie.ai image resize verification)
-Next up: 03-04 - Kling 2.6 cinematic motion generation
+Last session: 2026-01-14
+Stopped at: Completed 03-04 - Added script routing to n8n workflow (wizard scripts bypass GPT)
+Next up: 03-05 - ElevenLabs narration with timing
 Resume file: None
