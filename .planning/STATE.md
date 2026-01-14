@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-13)
 ## Current Position
 
 Phase: 3 of 6 (n8n Integration)
-Plan: 4 of 7 in current phase (03-04 complete)
+Plan: 5 of 7 in current phase (03-05 complete)
 Status: In progress
-Last activity: 2026-01-14 — Completed 03-04 (Script integration - wizard scripts bypass GPT)
+Last activity: 2026-01-14 — Completed 03-05 (Beat-sync timing wired through workflow)
 
-Progress: ███████████████░░░░░░░░░░░░░░░ 50%
+Progress: ████████████████░░░░░░░░░░░░░░ 54%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13
-- Average duration: 12 min
-- Total execution time: 2.6 hours
+- Total plans completed: 14
+- Average duration: 11 min
+- Total execution time: 2.7 hours
 
 **By Phase:**
 
@@ -29,10 +29,10 @@ Progress: ███████████████░░░░░░░░�
 |-------|-------|-------|----------|
 | 1. Foundation | 3/3 ✓ | 18 min | 6 min |
 | 2. Create Wizard | 6/6 ✓ | 102 min | 17 min |
-| 3. n8n Integration | 4/7 | 36 min | 9 min |
+| 3. n8n Integration | 5/7 | 40 min | 8 min |
 
 **Recent Trend:**
-- Last 5 plans: 12m, 24m, 12m, 5m, 12m
+- Last 5 plans: 24m, 12m, 5m, 12m, 4m
 - Trend: Fast (n8n MCP automation)
 
 ## Accumulated Context
@@ -78,6 +78,7 @@ Recent decisions affecting current work:
 - **Images map to script sections**: GPT-4o room labels determine which images play during which narration section (exterior→hook, entry→first impression, living/kitchen→interior, bed/bath→features, yard→closing)
 - **Wizard validation minimums**: Min 5 images (one per section), min 50 chars per script section (for proper TTS timing). Fallback logic reuses images when sections lack matching room types.
 - **Script routing in n8n**: Wizard-provided scripts (webhookResponse) bypass GPT generation and route directly to ElevenLabs TTS. Payloads without webhookResponse fall back to GPT flow.
+- **imageTransitionTimes calculation**: First snare hit per narration gap selected as transition point. Avoids clustered transitions - one punchy beat per lull.
 
 ### Deferred Issues
 
@@ -90,6 +91,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-14
-Stopped at: Completed 03-04 - Added script routing to n8n workflow (wizard scripts bypass GPT)
-Next up: 03-05 - ElevenLabs narration with timing
+Stopped at: Completed 03-05 - Beat-sync timing calculation wired through n8n workflow
+Next up: 03-06 - json2video dual-render (branded + unbranded)
 Resume file: None

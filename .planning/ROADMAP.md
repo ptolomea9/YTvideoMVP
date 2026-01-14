@@ -62,7 +62,7 @@ Plans:
 - [x] 03-02: Webhook trigger from Next.js ✓
 - [x] 03-03: Image processing (Kie.ai resize to 1080x1920) ✓
 - [x] 03-04: Script integration (wizard scripts bypass GPT) ✓
-- [ ] 03-05: ElevenLabs narration with timing
+- [x] 03-05: ElevenLabs narration with timing ✓
 - [ ] 03-06: json2video dual-render (branded + unbranded)
 - [ ] 03-07: Completion webhook and status updates
 
@@ -110,7 +110,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Foundation | 3/3 | ✓ Complete | 2026-01-13 |
 | 2. Create Wizard | 6/6 | ✓ Complete | 2026-01-13 |
-| 3. n8n Integration | 4/7 | In progress | - |
+| 3. n8n Integration | 5/7 | In progress | - |
 | 4. Dashboard | 0/4 | Not started | - |
 | 5. Payments | 0/3 | Not started | - |
 | 6. Settings | 0/3 | Not started | - |
