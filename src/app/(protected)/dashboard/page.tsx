@@ -2,7 +2,20 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { VideoGallery } from '@/components/dashboard/VideoGallery';
 import { Button } from '@/components/ui/button';
-import type { VideoWithListing } from '@/types/video';
+import type { VideoWithListing, VideoStatus } from '@/types/video';
+
+// Processing statuses that should be checked for timeout
+const PROCESSING_STATUSES: VideoStatus[] = [
+  'pending',
+  'processing',
+  'sorting_images',
+  'generating_motion',
+  'generating_audio',
+  'rendering',
+];
+
+// Timeout in minutes after which a processing video is marked as failed
+const PROCESSING_TIMEOUT_MINUTES = 20;
 
 /**
  * Dashboard page - Video gallery showing user's generated videos.
@@ -38,20 +51,43 @@ export default async function DashboardPage() {
     .eq('user_id', user?.id)
     .order('created_at', { ascending: false });
 
+  // Check for and mark stale processing videos as failed
+  const now = new Date();
+  const timeoutMs = PROCESSING_TIMEOUT_MINUTES * 60 * 1000;
+  const staleVideos = (videos || []).filter((v) => {
+    if (!PROCESSING_STATUSES.includes(v.status as VideoStatus)) return false;
+    const createdAt = new Date(v.created_at);
+    return now.getTime() - createdAt.getTime() > timeoutMs;
+  });
+
+  // Update stale videos to failed status
+  if (staleVideos.length > 0) {
+    await supabase
+      .from('videos')
+      .update({
+        status: 'failed',
+        error_message: 'Processing timed out after 20 minutes',
+      })
+      .in('id', staleVideos.map((v) => v.id));
+  }
+
   // Transform to match VideoWithListing type
   // Supabase returns listing as object due to !inner join
+  // Also apply the stale status update to local data
+  const staleVideoIds = new Set(staleVideos.map((v) => v.id));
   const typedVideos: VideoWithListing[] = (videos || []).map((v) => {
     const listing = v.listing as unknown as { address: string; city: string | null; state: string | null };
+    const isStale = staleVideoIds.has(v.id);
     return {
       id: v.id,
       listing_id: v.listing_id,
       user_id: v.user_id,
-      status: v.status,
+      status: isStale ? 'failed' : v.status,
       thumbnail_url: v.thumbnail_url,
       branded_url: v.branded_url,
       unbranded_url: v.unbranded_url,
       duration_seconds: v.duration_seconds,
-      error_message: v.error_message,
+      error_message: isStale ? 'Processing timed out after 20 minutes' : v.error_message,
       created_at: v.created_at,
       listing,
     };

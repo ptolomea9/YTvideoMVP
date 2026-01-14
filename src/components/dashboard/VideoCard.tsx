@@ -3,15 +3,27 @@
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import { useRef, useState } from 'react';
-import { Loader2, Play, Download } from 'lucide-react';
+import { Loader2, Play, Download, Trash2 } from 'lucide-react';
 import { VideoWithListing, VIDEO_STATUS_CONFIG } from '@/types/video';
 import { cn } from '@/lib/utils';
 import { VideoProgressOverlay } from './VideoProgressOverlay';
 import { MediaKitDialog } from './MediaKitDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface VideoCardProps {
   video: VideoWithListing;
   onSelect?: () => void;
+  onDelete?: (videoId: string) => void;
 }
 
 /**
@@ -20,12 +32,19 @@ interface VideoCardProps {
  * Hover state includes subtle scale and border highlight.
  * Completed videos autoplay on hover.
  */
-export function VideoCard({ video, onSelect }: VideoCardProps) {
+export function VideoCard({ video, onSelect, onDelete }: VideoCardProps) {
   const statusConfig = VIDEO_STATUS_CONFIG[video.status];
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isHovering, setIsHovering] = useState(false);
   const [isVideoLoading, setIsVideoLoading] = useState(false);
   const [mediaKitOpen, setMediaKitOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    setIsDeleting(true);
+    onDelete(video.id);
+  };
 
   // Format address for display
   const displayAddress = video.listing.city && video.listing.state
@@ -169,6 +188,50 @@ export function VideoCard({ video, onSelect }: VideoCardProps) {
             {statusConfig.label}
           </span>
         </div>
+
+        {/* Delete button - top left, visible on hover */}
+        {onDelete && (
+          <div className="absolute top-3 left-3 z-20">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button
+                  onClick={(e) => e.stopPropagation()}
+                  disabled={isDeleting}
+                  className={cn(
+                    'p-2 rounded-full bg-black/50 hover:bg-destructive/80 transition-colors backdrop-blur-sm',
+                    'opacity-0 group-hover:opacity-100',
+                    'focus:outline-none focus:opacity-100',
+                    isDeleting && 'opacity-50 cursor-not-allowed'
+                  )}
+                  aria-label="Delete video"
+                >
+                  {isDeleting ? (
+                    <Loader2 className="w-4 h-4 text-white animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4 text-white" />
+                  )}
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this video?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete the video for &quot;{displayAddress}&quot; and cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDelete}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        )}
 
         {/* Address overlay - bottom with gradient (hidden when progress overlay is shown) */}
         {!showOverlay && (

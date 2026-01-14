@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { VideoCard } from './VideoCard';
 import { VideoPlayerDialog } from './VideoPlayerDialog';
+import { useToast } from '@/hooks/use-toast';
 import type { VideoWithListing, VideoStatus } from '@/types/video';
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
@@ -35,6 +36,41 @@ export function VideoGallery({ initialVideos, userId }: VideoGalleryProps) {
   const [videos, setVideos] = useState<VideoWithListing[]>(initialVideos);
   const [selectedVideo, setSelectedVideo] = useState<VideoWithListing | null>(null);
   const router = useRouter();
+  const { toast } = useToast();
+
+  // Handle video deletion
+  const handleDelete = useCallback(async (videoId: string) => {
+    try {
+      const response = await fetch(`/api/videos/${videoId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete video');
+      }
+
+      // Remove from local state
+      setVideos((current) => current.filter((v) => v.id !== videoId));
+
+      // Close dialog if this video was selected
+      if (selectedVideo?.id === videoId) {
+        setSelectedVideo(null);
+      }
+
+      toast({
+        title: 'Video deleted',
+        description: 'The video has been permanently removed.',
+      });
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast({
+        title: 'Delete failed',
+        description: error instanceof Error ? error.message : 'Failed to delete video',
+        variant: 'destructive',
+      });
+    }
+  }, [selectedVideo, toast]);
 
   // Subscribe to video changes for this user
   useEffect(() => {
@@ -115,6 +151,7 @@ export function VideoGallery({ initialVideos, userId }: VideoGalleryProps) {
             key={video.id}
             video={video}
             onSelect={() => setSelectedVideo(video)}
+            onDelete={handleDelete}
           />
         ))}
       </div>
