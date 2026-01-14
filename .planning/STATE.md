@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-13)
 ## Current Position
 
 Phase: 3 of 6 (n8n Integration)
-Plan: 0 of 7 in current phase
-Status: Ready to start
-Last activity: 2026-01-13 — Completed Phase 2 (Create Wizard)
+Plan: 1 of 7 in current phase (03-01 complete)
+Status: Ready for 03-02
+Last activity: 2026-01-13 — Completed 03-01 (Debug existing n8n workflow)
 
-Progress: ██████████████████████░░░░░░░░ 45%
+Progress: ███████████████████████░░░░░░░ 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
+- Total plans completed: 10
 - Average duration: 13 min
-- Total execution time: 2.0 hours
+- Total execution time: 2.2 hours
 
 **By Phase:**
 
@@ -29,9 +29,10 @@ Progress: ██████████████████████░�
 |-------|-------|-------|----------|
 | 1. Foundation | 3/3 ✓ | 18 min | 6 min |
 | 2. Create Wizard | 6/6 ✓ | 102 min | 17 min |
+| 3. n8n Integration | 1/7 | 12 min | 12 min |
 
 **Recent Trend:**
-- Last 5 plans: 4m, 12m, 8m, 12m, 24m
+- Last 5 plans: 12m, 8m, 12m, 24m, 12m
 - Trend: Stable
 
 ## Accumulated Context
@@ -65,6 +66,9 @@ Recent decisions affecting current work:
 - Instant Voice Clone for user recordings/uploads
 - Images stored in listings.images JSONB column
 - Videos created with status='pending' until n8n processes
+- Selected Tour Video workflow for MVP (simpler than main workflow, no HeyGen avatar)
+- n8n payload stored in videos table for debugging webhook triggers
+- Default music URL provided even when music disabled (workflow handles muting)
 
 ### Deferred Issues
 
@@ -77,6 +81,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-13
-Stopped at: Completed 02-05-PLAN.md (Voice/Music/MLS options)
-Next up: Phase 3 - n8n Integration (03-01: Debug existing n8n workflow)
+Stopped at: Completed 03-01-PLAN.md (Debug existing n8n workflow)
+Next up: 03-02 - Webhook trigger from Next.js
 Resume file: None
