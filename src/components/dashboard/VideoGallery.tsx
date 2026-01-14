@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { VideoCard } from './VideoCard';
 import { VideoPlayerDialog } from './VideoPlayerDialog';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import type { VideoWithListing, VideoStatus } from '@/types/video';
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
@@ -36,7 +36,6 @@ export function VideoGallery({ initialVideos, userId }: VideoGalleryProps) {
   const [videos, setVideos] = useState<VideoWithListing[]>(initialVideos);
   const [selectedVideo, setSelectedVideo] = useState<VideoWithListing | null>(null);
   const router = useRouter();
-  const { toast } = useToast();
 
   // Handle video deletion
   const handleDelete = useCallback(async (videoId: string) => {
@@ -58,19 +57,12 @@ export function VideoGallery({ initialVideos, userId }: VideoGalleryProps) {
         setSelectedVideo(null);
       }
 
-      toast({
-        title: 'Video deleted',
-        description: 'The video has been permanently removed.',
-      });
+      toast.success('Video deleted');
     } catch (error) {
       console.error('Delete error:', error);
-      toast({
-        title: 'Delete failed',
-        description: error instanceof Error ? error.message : 'Failed to delete video',
-        variant: 'destructive',
-      });
+      toast.error(error instanceof Error ? error.message : 'Failed to delete video');
     }
-  }, [selectedVideo, toast]);
+  }, [selectedVideo]);
 
   // Subscribe to video changes for this user
   useEffect(() => {
