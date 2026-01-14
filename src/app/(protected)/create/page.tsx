@@ -1,33 +1,20 @@
 "use client";
 
+import { useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StepIndicator } from "@/components/wizard/step-indicator";
 import { useWizard } from "@/lib/wizard/wizard-context";
 import { WizardStep } from "@/lib/wizard/types";
+import {
+  PropertyDataStep,
+  type PropertyDataStepHandle,
+} from "@/components/wizard/steps/property-data-step";
 
 /**
  * Step placeholder components - Will be replaced in subsequent plans.
  */
-function DataStepPlaceholder() {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <h2 className="font-heading text-2xl font-semibold text-foreground">
-        Property Data
-      </h2>
-      <p className="mt-2 text-muted-foreground">
-        Enter your property details to get started.
-      </p>
-      <div className="mt-8 rounded-lg border border-dashed border-border/50 p-8">
-        <p className="text-sm text-muted-foreground">
-          Property data form will be implemented in Plan 02-02
-        </p>
-      </div>
-    </div>
-  );
-}
-
 function UploadStepPlaceholder() {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -83,16 +70,6 @@ function StyleStepPlaceholder() {
 }
 
 /**
- * Step content component map.
- */
-const STEP_COMPONENTS: Record<WizardStep, React.ComponentType> = {
-  [WizardStep.DATA]: DataStepPlaceholder,
-  [WizardStep.UPLOAD]: UploadStepPlaceholder,
-  [WizardStep.SCRIPT]: ScriptStepPlaceholder,
-  [WizardStep.STYLE]: StyleStepPlaceholder,
-};
-
-/**
  * Animation variants for step transitions.
  */
 const stepVariants = {
@@ -122,20 +99,60 @@ const stepVariants = {
 export default function CreatePage() {
   const { state, nextStep, prevStep, goToStep, canProceed } = useWizard();
   const { currentStep, completedSteps, isSubmitting } = state;
+  const propertyStepRef = useRef<PropertyDataStepHandle>(null);
 
   const isFirstStep = currentStep === WizardStep.DATA;
   const isLastStep = currentStep === WizardStep.STYLE;
 
-  // Track direction for animation
-  const StepComponent = STEP_COMPONENTS[currentStep];
+  /**
+   * Render the current step component.
+   */
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case WizardStep.DATA:
+        return <PropertyDataStep ref={propertyStepRef} />;
+      case WizardStep.UPLOAD:
+        return <UploadStepPlaceholder />;
+      case WizardStep.SCRIPT:
+        return <ScriptStepPlaceholder />;
+      case WizardStep.STYLE:
+        return <StyleStepPlaceholder />;
+      default:
+        return null;
+    }
+  };
 
-  const handleNext = () => {
+  /**
+   * Handle next button click with validation.
+   */
+  const handleNext = async () => {
     if (isLastStep) {
       // TODO: Submit wizard - will be implemented in Plan 02-05
       console.log("Submit wizard", state);
+      return;
+    }
+
+    // Validate current step before proceeding
+    if (currentStep === WizardStep.DATA) {
+      if (propertyStepRef.current) {
+        const success = await propertyStepRef.current.submitForm();
+        if (success) {
+          nextStep();
+        }
+      }
     } else {
       nextStep();
     }
+  };
+
+  /**
+   * Check if Next button should be disabled.
+   * For step 1, we check if the form is valid via ref.
+   */
+  const isNextDisabled = () => {
+    if (isSubmitting) return true;
+    // For now, allow clicking Next on DATA step - validation happens on click
+    return false;
   };
 
   return (
@@ -158,7 +175,7 @@ export default function CreatePage() {
       />
 
       {/* Step content with animations */}
-      <div className="relative min-h-[300px] overflow-hidden">
+      <div className="relative min-h-[400px] overflow-hidden">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={currentStep}
@@ -173,7 +190,7 @@ export default function CreatePage() {
               damping: 30,
             }}
           >
-            <StepComponent />
+            {renderStepContent()}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -196,7 +213,7 @@ export default function CreatePage() {
 
         <Button
           onClick={handleNext}
-          disabled={isSubmitting}
+          disabled={isNextDisabled()}
           className="gap-2"
         >
           {isLastStep ? (
