@@ -2,11 +2,17 @@
 
 import * as React from "react";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
-import { Sparkles, Loader2, GripVertical, Check, Pencil, X, Wand2 } from "lucide-react";
+import { Sparkles, Loader2, GripVertical, Check, Pencil, X, Wand2, Expand } from "lucide-react";
 import { nanoid } from "nanoid";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Dropzone, ImagePreviewGrid, type ImagePreview } from "@/components/ui/dropzone";
 import { cn } from "@/lib/utils";
 import { useWizard } from "@/lib/wizard/wizard-context";
@@ -185,6 +191,127 @@ function EnhanceButton({
 }
 
 /**
+ * ImagePreviewDialog - Large preview of image with enhancement controls.
+ */
+function ImagePreviewDialog({
+  image,
+  open,
+  onOpenChange,
+  onSelect,
+  onApply,
+  onRevert,
+  isApplying,
+}: {
+  image: AnalyzedImage;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSelect: (preset: EnhancementPreset) => void;
+  onApply: () => void;
+  onRevert: () => void;
+  isApplying: boolean;
+}) {
+  const isPreviewing = image.enhancementStatus === "previewing";
+  const isApplied = image.enhancementStatus === "applied";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {image.label}
+            {isApplied && (
+              <span className="text-xs font-normal text-green-500">
+                <Check className="mr-1 inline h-3 w-3" />
+                Enhanced
+              </span>
+            )}
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* Large image preview */}
+        <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={image.enhancedUrl || image.url}
+            alt={image.label}
+            className={cn(
+              "h-full w-full object-contain transition-all duration-300",
+              image.enhancementStatus === "previewing" &&
+                ENHANCEMENT_FILTER_CLASSES[image.enhancement]
+            )}
+          />
+          {isPreviewing && (
+            <div className="absolute bottom-3 left-3 rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground">
+              CSS Preview — select Apply for full quality
+            </div>
+          )}
+        </div>
+
+        {/* Enhancement controls */}
+        <div className="flex flex-col gap-3">
+          {/* Preset selection */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Enhancement:</span>
+            <div className="flex gap-1">
+              {ENHANCEMENT_PRESETS.map((preset) => (
+                <Button
+                  key={preset.value}
+                  variant={image.enhancement === preset.value ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => onSelect(preset.value)}
+                  disabled={isApplying}
+                >
+                  {preset.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Apply/Revert actions */}
+          <div className="flex items-center justify-between border-t pt-3">
+            {isPreviewing && (
+              <>
+                <span className="text-sm text-muted-foreground">
+                  Preview shows CSS approximation. Apply to get full AI enhancement.
+                </span>
+                <Button onClick={onApply} disabled={isApplying}>
+                  {isApplying ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Applying Enhancement...
+                    </>
+                  ) : (
+                    "Apply Enhancement"
+                  )}
+                </Button>
+              </>
+            )}
+
+            {isApplied && (
+              <>
+                <span className="text-sm text-green-500">
+                  <Check className="mr-1 inline h-4 w-4" />
+                  AI enhancement applied successfully
+                </span>
+                <Button variant="outline" onClick={onRevert}>
+                  Revert to Original
+                </Button>
+              </>
+            )}
+
+            {image.enhancement === "original" && (
+              <span className="text-sm text-muted-foreground">
+                Select an enhancement preset to preview color changes
+              </span>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
  * Single image card with editable label and description.
  */
 interface ImageCardProps {
@@ -212,6 +339,7 @@ function ImageCard({
   const [isEditingFeatures, setIsEditingFeatures] = React.useState(false);
   const [labelValue, setLabelValue] = React.useState(image.label);
   const [featuresValue, setFeaturesValue] = React.useState(image.features.join(" • "));
+  const [isPreviewOpen, setIsPreviewOpen] = React.useState(false);
   const labelInputRef = React.useRef<HTMLInputElement>(null);
   const featuresInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -293,7 +421,18 @@ function ImageCard({
         <div className="absolute bottom-1 left-1 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-medium text-foreground">
           {ROOM_TYPE_LABELS[image.roomType]}
         </div>
-        {/* Enhancement button - progressive disclosure */}
+        {/* Expand button - top right */}
+        <button
+          onClick={() => setIsPreviewOpen(true)}
+          className={cn(
+            "absolute top-1 right-1 rounded-full p-1.5 transition-all",
+            "opacity-0 group-hover:opacity-100",
+            "bg-background/90 text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Expand className="h-3.5 w-3.5" />
+        </button>
+        {/* Enhancement button - bottom right */}
         <EnhanceButton
           currentPreset={image.enhancement}
           status={image.enhancementStatus}
@@ -303,6 +442,17 @@ function ImageCard({
           isApplying={applyingId === image.id}
         />
       </div>
+
+      {/* Image preview dialog */}
+      <ImagePreviewDialog
+        image={image}
+        open={isPreviewOpen}
+        onOpenChange={setIsPreviewOpen}
+        onSelect={(preset) => onEnhancementChange(image.id, preset)}
+        onApply={() => onApplyEnhancement(image.id)}
+        onRevert={() => onRevertEnhancement(image.id)}
+        isApplying={applyingId === image.id}
+      />
 
       {/* Label and features */}
       <div className="flex flex-1 flex-col gap-1">
