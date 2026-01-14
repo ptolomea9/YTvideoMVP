@@ -60,6 +60,16 @@ export type RoomType =
   | "other";
 
 /**
+ * Enhancement preset options for image processing.
+ * Applied via Kie.ai in n8n pipeline.
+ */
+export type EnhancementPreset =
+  | "original"      // No enhancement
+  | "golden_hour"   // Warm sunset lighting, sky enhancement
+  | "hdr"           // High dynamic range, detail enhancement
+  | "vivid";        // Saturated colors, contrast boost
+
+/**
  * Image data after upload (Step 2 - UPLOAD).
  * Uses URL strings instead of File objects to keep state serializable.
  */
@@ -71,6 +81,7 @@ export interface WizardImage {
   label: string;          // AI-suggested label (editable by user)
   roomType: RoomType;     // Broad category for video sequencing
   features: string[];     // Notable features for script generation
+  enhancement: EnhancementPreset;  // Image enhancement preset (default: 'original')
 }
 
 /**
@@ -135,6 +146,7 @@ export type WizardAction =
   | { type: "ADD_IMAGES"; payload: WizardImage[] }
   | { type: "REMOVE_IMAGE"; payload: string }
   | { type: "REORDER_IMAGES"; payload: WizardImage[] }
+  | { type: "UPDATE_IMAGE_ENHANCEMENT"; payload: { imageId: string; preset: EnhancementPreset } }
   | { type: "UPDATE_SCRIPT"; payload: ScriptSection[] }
   | { type: "UPDATE_SCRIPT_SECTION"; payload: ScriptSection }
   | { type: "SET_STYLE_OPTIONS"; payload: Partial<StyleOptions> }

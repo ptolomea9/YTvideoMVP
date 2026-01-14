@@ -388,6 +388,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           label: img.label,
           roomType: img.roomType,
           features: img.features,
+          enhancement: "original",
         }));
         addImages(wizardImages);
 
@@ -427,6 +428,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           label: img.label,
           roomType: img.roomType,
           features: img.features,
+          enhancement: "original",
         }));
         reorderImages(wizardImages);
       },
@@ -456,6 +458,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           label: img.label,
           roomType: img.roomType,
           features: img.features,
+          enhancement: "original",
         }));
         reorderImages(wizardImages);
       },
@@ -478,6 +481,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           label: img.label,
           roomType: img.roomType,
           features: img.features,
+          enhancement: "original",
         }));
         reorderImages(wizardImages);
       },
@@ -499,6 +503,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           label: img.label,
           roomType: img.roomType,
           features: img.features,
+          enhancement: "original",
         }));
         reorderImages(wizardImages);
       },
