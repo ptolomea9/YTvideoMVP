@@ -19,6 +19,14 @@ function getOpenAI(): OpenAI {
 
 /**
  * Section configuration for grouping images and generating narrative.
+ *
+ * Flow: Exterior → Interior common areas → Outdoor (backyard) → Private spaces → Closing
+ * This creates a natural tour progression from broad to narrow:
+ * - Approach the house (curb appeal)
+ * - Enter and explore living spaces
+ * - Step outside to backyard/patio
+ * - Retreat to private bedrooms/bathrooms
+ * - Call to action
  */
 const SECTION_CONFIG: {
   type: ScriptSectionType;
@@ -27,8 +35,8 @@ const SECTION_CONFIG: {
 }[] = [
   { type: "opening", title: "Opening", roomTypes: ["exterior"] },
   { type: "living", title: "Living Spaces", roomTypes: ["entry", "living", "kitchen", "dining"] },
-  { type: "private", title: "Private Retreat", roomTypes: ["master_bedroom", "bedroom", "bathroom"] },
   { type: "outdoor", title: "Outdoor Living", roomTypes: ["outdoor"] },
+  { type: "private", title: "Private Retreat", roomTypes: ["master_bedroom", "bedroom", "bathroom"] },
   { type: "closing", title: "Closing", roomTypes: [] }, // No images, CTA only
 ];
 
@@ -201,18 +209,11 @@ Goal: Attention-grabbing hook with property type and standout exterior feature. 
   sectionDescriptions.push(`
 **LIVING SPACES SECTION** (Entry, Living, Kitchen, Dining)
 Images: ${livingImages.length > 0 ? livingImages.map((img) => `"${img.label}" (${img.features.join(", ")})`).join("; ") : "None"}
-Goal: Flow through main living areas, referencing specific image labels and features naturally.
+Goal: Flow through main living areas, referencing specific image labels and features naturally. Transition from the entry through the open-concept spaces.
 `);
 
-  // Private section
-  const privateImages = sectionGroups.get("private") || [];
-  sectionDescriptions.push(`
-**PRIVATE RETREAT SECTION** (Bedrooms, Bathrooms)
-Images: ${privateImages.length > 0 ? privateImages.map((img) => `"${img.label}" (${img.features.join(", ")})`).join("; ") : "None"}
-Goal: Intimate, restful spaces. Highlight master suite and spa-like features.
-`);
-
-  // Outdoor section - emphasize POIs must be mentioned
+  // Outdoor section - comes BEFORE private spaces in the tour flow
+  // Emphasize POIs must be mentioned
   const outdoorImages = sectionGroups.get("outdoor") || [];
   const neighborhoodPOIs = property.features.length > 0
     ? `
@@ -220,9 +221,17 @@ Goal: Intimate, restful spaces. Highlight master suite and spa-like features.
 These nearby amenities are key selling points. Weave them naturally into the narration, e.g., "Just steps from [POI]" or "Minutes from [POI] and [POI]".`
     : "";
   sectionDescriptions.push(`
-**OUTDOOR LIVING SECTION** (Backyard, Amenities, Neighborhood)
+**OUTDOOR LIVING SECTION** (Backyard, Patio, Pool, Amenities)
 Images: ${outdoorImages.length > 0 ? outdoorImages.map((img) => `"${img.label}" (${img.features.join(", ")})`).join("; ") : "None"}${neighborhoodPOIs}
-Goal: Outdoor lifestyle, entertaining potential, AND location advantages. Highlight both the property's outdoor spaces AND the neighborhood conveniences.
+Goal: Outdoor lifestyle and entertaining potential. Transition naturally from interior living spaces to the backyard oasis. Also mention neighborhood conveniences and location advantages.
+`);
+
+  // Private section - comes AFTER outdoor in the tour flow (broad to narrow)
+  const privateImages = sectionGroups.get("private") || [];
+  sectionDescriptions.push(`
+**PRIVATE RETREAT SECTION** (Bedrooms, Bathrooms)
+Images: ${privateImages.length > 0 ? privateImages.map((img) => `"${img.label}" (${img.features.join(", ")})`).join("; ") : "None"}
+Goal: Intimate, restful spaces. Transition from outdoor back inside to the private quarters. Highlight master suite and spa-like features. End this section setting up the closing CTA.
 `);
 
   // Closing section - include agent contact if available
@@ -274,8 +283,8 @@ Example:
   "sections": [
     {"type": "opening", "content": "Welcome to..."},
     {"type": "living", "content": "Step inside..."},
+    {"type": "outdoor", "content": "Step outside to..."},
     {"type": "private", "content": "Retreat to..."},
-    {"type": "outdoor", "content": "Step outside..."},
     {"type": "closing", "content": "Don't miss..."}
   ]
 }`;
