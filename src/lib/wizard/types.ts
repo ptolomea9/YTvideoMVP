@@ -71,13 +71,26 @@ export interface WizardImage {
 }
 
 /**
+ * Script section types for the 5 tour sections.
+ */
+export type ScriptSectionType =
+  | "opening"    // Exterior/curb appeal
+  | "living"     // Entry, living, kitchen, dining
+  | "private"    // Bedrooms, bathrooms
+  | "outdoor"    // Backyard, amenities, POIs
+  | "closing";   // CTA wrap-up
+
+/**
  * Script section for narration (Step 3 - SCRIPT).
+ * Section-based approach: 5 cohesive sections instead of per-image scripts.
  */
 export interface ScriptSection {
   id: string;
-  imageId: string;
-  content: string;
-  duration: number; // seconds
+  type: ScriptSectionType;
+  title: string;           // Display title (e.g., "Opening")
+  content: string;         // Narration text
+  originalContent: string; // For detecting edits
+  imageIds: string[];      // Images referenced in this section
   order: number;
 }
 

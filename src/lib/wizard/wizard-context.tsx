@@ -76,10 +76,11 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
       return {
         ...state,
         images: state.images.filter((img) => img.id !== action.payload),
-        // Also remove associated script sections
-        scriptSections: state.scriptSections.filter(
-          (section) => section.imageId !== action.payload
-        ),
+        // Update script sections to remove the image reference
+        scriptSections: state.scriptSections.map((section) => ({
+          ...section,
+          imageIds: section.imageIds.filter((id) => id !== action.payload),
+        })),
         error: null,
       };
 
