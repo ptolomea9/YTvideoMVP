@@ -16,6 +16,7 @@ import {
   type ScriptSection,
   type StyleOptions,
   type EnhancementPreset,
+  type EnhancementStatus,
   initialWizardState,
 } from "./types";
 
@@ -97,7 +98,56 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
         ...state,
         images: state.images.map((img) =>
           img.id === action.payload.imageId
-            ? { ...img, enhancement: action.payload.preset }
+            ? {
+                ...img,
+                enhancement: action.payload.preset,
+                // Set to previewing if selecting a preset, idle if reverting to original
+                enhancementStatus: action.payload.preset === "original" ? "idle" : "previewing",
+                // Clear enhanced URL when changing presets
+                enhancedUrl: action.payload.preset === "original" ? undefined : img.enhancedUrl,
+              }
+            : img
+        ),
+        error: null,
+      };
+
+    case "SET_ENHANCEMENT_STATUS":
+      return {
+        ...state,
+        images: state.images.map((img) =>
+          img.id === action.payload.imageId
+            ? { ...img, enhancementStatus: action.payload.status }
+            : img
+        ),
+        error: null,
+      };
+
+    case "SET_ENHANCED_URL":
+      return {
+        ...state,
+        images: state.images.map((img) =>
+          img.id === action.payload.imageId
+            ? {
+                ...img,
+                enhancedUrl: action.payload.enhancedUrl,
+                enhancementStatus: "applied" as EnhancementStatus,
+              }
+            : img
+        ),
+        error: null,
+      };
+
+    case "REVERT_ENHANCEMENT":
+      return {
+        ...state,
+        images: state.images.map((img) =>
+          img.id === action.payload.imageId
+            ? {
+                ...img,
+                enhancement: "original",
+                enhancementStatus: "idle",
+                enhancedUrl: undefined,
+              }
             : img
         ),
         error: null,
@@ -162,6 +212,9 @@ interface WizardContextValue {
   removeImage: (imageId: string) => void;
   reorderImages: (images: WizardImage[]) => void;
   updateImageEnhancement: (imageId: string, preset: EnhancementPreset) => void;
+  setEnhancementStatus: (imageId: string, status: EnhancementStatus) => void;
+  setEnhancedUrl: (imageId: string, enhancedUrl: string) => void;
+  revertEnhancement: (imageId: string) => void;
   updateScript: (sections: ScriptSection[]) => void;
   updateScriptSection: (section: ScriptSection) => void;
   setStyleOptions: (options: Partial<StyleOptions>) => void;
@@ -215,6 +268,30 @@ export function WizardProvider({ children }: { children: ReactNode }) {
       dispatch({
         type: "UPDATE_IMAGE_ENHANCEMENT",
         payload: { imageId, preset },
+      }),
+    []
+  );
+  const setEnhancementStatus = useCallback(
+    (imageId: string, status: EnhancementStatus) =>
+      dispatch({
+        type: "SET_ENHANCEMENT_STATUS",
+        payload: { imageId, status },
+      }),
+    []
+  );
+  const setEnhancedUrl = useCallback(
+    (imageId: string, enhancedUrl: string) =>
+      dispatch({
+        type: "SET_ENHANCED_URL",
+        payload: { imageId, enhancedUrl },
+      }),
+    []
+  );
+  const revertEnhancement = useCallback(
+    (imageId: string) =>
+      dispatch({
+        type: "REVERT_ENHANCEMENT",
+        payload: { imageId },
       }),
     []
   );
@@ -282,6 +359,9 @@ export function WizardProvider({ children }: { children: ReactNode }) {
     removeImage,
     reorderImages,
     updateImageEnhancement,
+    setEnhancementStatus,
+    setEnhancedUrl,
+    revertEnhancement,
     updateScript,
     updateScriptSection,
     setStyleOptions,

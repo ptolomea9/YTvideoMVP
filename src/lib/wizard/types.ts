@@ -70,18 +70,30 @@ export type EnhancementPreset =
   | "vivid";        // Saturated colors, contrast boost
 
 /**
+ * Enhancement status for tracking API calls.
+ */
+export type EnhancementStatus =
+  | "idle"          // No enhancement selected or reverted
+  | "previewing"    // CSS preview active, not yet applied
+  | "applying"      // Kie.ai API call in progress
+  | "applied"       // Enhancement applied successfully
+  | "error";        // Enhancement failed
+
+/**
  * Image data after upload (Step 2 - UPLOAD).
  * Uses URL strings instead of File objects to keep state serializable.
  */
 export interface WizardImage {
   id: string;
-  url: string;
+  url: string;                      // Original image URL
   filename: string;
   order: number;
-  label: string;          // AI-suggested label (editable by user)
-  roomType: RoomType;     // Broad category for video sequencing
-  features: string[];     // Notable features for script generation
-  enhancement: EnhancementPreset;  // Image enhancement preset (default: 'original')
+  label: string;                    // AI-suggested label (editable by user)
+  roomType: RoomType;               // Broad category for video sequencing
+  features: string[];               // Notable features for script generation
+  enhancement: EnhancementPreset;   // Image enhancement preset (default: 'original')
+  enhancementStatus: EnhancementStatus;  // Status of enhancement (default: 'idle')
+  enhancedUrl?: string;             // URL of Kie.ai enhanced image (if applied)
 }
 
 /**
@@ -147,6 +159,9 @@ export type WizardAction =
   | { type: "REMOVE_IMAGE"; payload: string }
   | { type: "REORDER_IMAGES"; payload: WizardImage[] }
   | { type: "UPDATE_IMAGE_ENHANCEMENT"; payload: { imageId: string; preset: EnhancementPreset } }
+  | { type: "SET_ENHANCEMENT_STATUS"; payload: { imageId: string; status: EnhancementStatus } }
+  | { type: "SET_ENHANCED_URL"; payload: { imageId: string; enhancedUrl: string } }
+  | { type: "REVERT_ENHANCEMENT"; payload: { imageId: string } }
   | { type: "UPDATE_SCRIPT"; payload: ScriptSection[] }
   | { type: "UPDATE_SCRIPT_SECTION"; payload: ScriptSection }
   | { type: "SET_STYLE_OPTIONS"; payload: Partial<StyleOptions> }

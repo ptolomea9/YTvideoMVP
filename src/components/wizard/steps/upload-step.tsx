@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Dropzone, ImagePreviewGrid, type ImagePreview } from "@/components/ui/dropzone";
 import { cn } from "@/lib/utils";
 import { useWizard } from "@/lib/wizard/wizard-context";
-import type { WizardImage, RoomType, EnhancementPreset } from "@/lib/wizard/types";
+import type { WizardImage, RoomType, EnhancementPreset, EnhancementStatus } from "@/lib/wizard/types";
 
 /**
  * Room type labels for display.
@@ -39,7 +39,19 @@ interface AnalyzedImage {
   roomType: RoomType;
   features: string[];
   enhancement: EnhancementPreset;
+  enhancementStatus: EnhancementStatus;
+  enhancedUrl?: string;
 }
+
+/**
+ * CSS filter classes for enhancement previews.
+ */
+const ENHANCEMENT_FILTER_CLASSES: Record<EnhancementPreset, string> = {
+  original: "",
+  golden_hour: "enhancement-golden-hour",
+  hdr: "enhancement-hdr",
+  vivid: "enhancement-vivid",
+};
 
 /**
  * Enhancement presets for image processing.
@@ -54,16 +66,27 @@ const ENHANCEMENT_PRESETS: { value: EnhancementPreset; label: string }[] = [
 /**
  * EnhanceButton - Progressive disclosure button for image enhancement presets.
  * Shows on hover, opens popover with preset options on click.
+ * Supports hybrid flow: CSS preview → Apply for real enhancement
  */
 function EnhanceButton({
   currentPreset,
+  status,
   onSelect,
+  onApply,
+  onRevert,
+  isApplying,
 }: {
   currentPreset: EnhancementPreset;
+  status: EnhancementStatus;
   onSelect: (preset: EnhancementPreset) => void;
+  onApply: () => void;
+  onRevert: () => void;
+  isApplying: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
-  const isEnhanced = currentPreset !== "original";
+  const isPreviewing = status === "previewing";
+  const isApplied = status === "applied";
+  const hasEnhancement = currentPreset !== "original";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -72,29 +95,89 @@ function EnhanceButton({
           className={cn(
             "absolute bottom-1 right-1 rounded-full p-1.5 transition-all",
             "opacity-0 group-hover:opacity-100", // Progressive disclosure
-            isEnhanced
+            (hasEnhancement || isApplied)
               ? "bg-primary text-primary-foreground opacity-100" // Always show if enhanced
               : "bg-background/90 text-muted-foreground hover:text-foreground"
           )}
+          disabled={isApplying}
         >
-          <Wand2 className="h-3.5 w-3.5" />
+          {isApplying ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : isApplied ? (
+            <Check className="h-3.5 w-3.5" />
+          ) : (
+            <Wand2 className="h-3.5 w-3.5" />
+          )}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-2" align="end">
-        <div className="flex gap-1">
-          {ENHANCEMENT_PRESETS.map((preset) => (
-            <Button
-              key={preset.value}
-              variant={currentPreset === preset.value ? "default" : "ghost"}
-              size="sm"
-              onClick={() => {
-                onSelect(preset.value);
-                setOpen(false);
-              }}
-            >
-              {preset.label}
-            </Button>
-          ))}
+      <PopoverContent className="w-auto p-3" align="end">
+        <div className="flex flex-col gap-2">
+          {/* Preset selection */}
+          <div className="flex gap-1">
+            {ENHANCEMENT_PRESETS.map((preset) => (
+              <Button
+                key={preset.value}
+                variant={currentPreset === preset.value ? "default" : "ghost"}
+                size="sm"
+                onClick={() => {
+                  onSelect(preset.value);
+                  if (preset.value === "original") {
+                    setOpen(false);
+                  }
+                }}
+                disabled={isApplying}
+              >
+                {preset.label}
+              </Button>
+            ))}
+          </div>
+
+          {/* Apply/Revert actions */}
+          {isPreviewing && (
+            <div className="flex items-center justify-between border-t pt-2">
+              <span className="text-xs text-muted-foreground">
+                CSS preview — click Apply for full quality
+              </span>
+              <Button
+                size="sm"
+                onClick={() => {
+                  onApply();
+                  setOpen(false);
+                }}
+                disabled={isApplying}
+                className="ml-2"
+              >
+                {isApplying ? (
+                  <>
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    Applying...
+                  </>
+                ) : (
+                  "Apply"
+                )}
+              </Button>
+            </div>
+          )}
+
+          {isApplied && (
+            <div className="flex items-center justify-between border-t pt-2">
+              <span className="text-xs text-green-500">
+                <Check className="mr-1 inline h-3 w-3" />
+                Enhancement applied
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  onRevert();
+                  setOpen(false);
+                }}
+                className="ml-2 text-muted-foreground"
+              >
+                Revert
+              </Button>
+            </div>
+          )}
         </div>
       </PopoverContent>
     </Popover>
@@ -109,10 +192,22 @@ interface ImageCardProps {
   onLabelChange: (id: string, label: string) => void;
   onFeaturesChange: (id: string, features: string[]) => void;
   onEnhancementChange: (id: string, preset: EnhancementPreset) => void;
+  onApplyEnhancement: (id: string) => void;
+  onRevertEnhancement: (id: string) => void;
+  applyingId: string | null;
   onRemove: (id: string) => void;
 }
 
-function ImageCard({ image, onLabelChange, onFeaturesChange, onEnhancementChange, onRemove }: ImageCardProps) {
+function ImageCard({
+  image,
+  onLabelChange,
+  onFeaturesChange,
+  onEnhancementChange,
+  onApplyEnhancement,
+  onRevertEnhancement,
+  applyingId,
+  onRemove,
+}: ImageCardProps) {
   const [isEditingLabel, setIsEditingLabel] = React.useState(false);
   const [isEditingFeatures, setIsEditingFeatures] = React.useState(false);
   const [labelValue, setLabelValue] = React.useState(image.label);
@@ -185,9 +280,14 @@ function ImageCard({ image, onLabelChange, onFeaturesChange, onEnhancementChange
       <div className="group relative h-20 w-28 flex-shrink-0 overflow-hidden rounded-md bg-muted">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={image.url}
+          src={image.enhancedUrl || image.url}
           alt={image.label}
-          className="h-full w-full object-cover"
+          className={cn(
+            "h-full w-full object-cover transition-all duration-300",
+            // Apply CSS filter when previewing (not applied yet)
+            image.enhancementStatus === "previewing" &&
+              ENHANCEMENT_FILTER_CLASSES[image.enhancement]
+          )}
         />
         {/* Room type badge */}
         <div className="absolute bottom-1 left-1 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-medium text-foreground">
@@ -196,7 +296,11 @@ function ImageCard({ image, onLabelChange, onFeaturesChange, onEnhancementChange
         {/* Enhancement button - progressive disclosure */}
         <EnhanceButton
           currentPreset={image.enhancement}
+          status={image.enhancementStatus}
           onSelect={(preset) => onEnhancementChange(image.id, preset)}
+          onApply={() => onApplyEnhancement(image.id)}
+          onRevert={() => onRevertEnhancement(image.id)}
+          isApplying={applyingId === image.id}
         />
       </div>
 
@@ -322,12 +426,21 @@ export interface UploadStepHandle {
  */
 export const UploadStep = React.forwardRef<UploadStepHandle>(
   function UploadStep(_, ref) {
-    const { state, addImages, reorderImages, updateImageEnhancement } = useWizard();
+    const {
+      state,
+      addImages,
+      reorderImages,
+      updateImageEnhancement,
+      setEnhancementStatus,
+      setEnhancedUrl,
+      revertEnhancement,
+    } = useWizard();
     const [localImages, setLocalImages] = React.useState<ImagePreview[]>([]);
     const [isAnalyzing, setIsAnalyzing] = React.useState(false);
     const [analyzedImages, setAnalyzedImages] = React.useState<AnalyzedImage[]>([]);
     const [analyzeError, setAnalyzeError] = React.useState<string | null>(null);
     const [hasBeenAnalyzed, setHasBeenAnalyzed] = React.useState(false);
+    const [applyingEnhancementId, setApplyingEnhancementId] = React.useState<string | null>(null);
 
     // Check if we have images in wizard state already (returning to step)
     React.useEffect(() => {
@@ -340,6 +453,8 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           roomType: img.roomType,
           features: img.features,
           enhancement: img.enhancement,
+          enhancementStatus: img.enhancementStatus,
+          enhancedUrl: img.enhancedUrl,
         }));
         setAnalyzedImages(existingImages);
         setHasBeenAnalyzed(true);
@@ -443,6 +558,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
             roomType: item.roomType,
             features: item.features || [],
             enhancement: "original" as EnhancementPreset,
+            enhancementStatus: "idle" as EnhancementStatus,
           })
         );
 
@@ -459,6 +575,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           roomType: img.roomType,
           features: img.features,
           enhancement: "original",
+          enhancementStatus: "idle",
         }));
         addImages(wizardImages);
 
@@ -499,6 +616,8 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           roomType: img.roomType,
           features: img.features,
           enhancement: img.enhancement,
+          enhancementStatus: img.enhancementStatus,
+          enhancedUrl: img.enhancedUrl,
         }));
         reorderImages(wizardImages);
       },
@@ -529,6 +648,8 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           roomType: img.roomType,
           features: img.features,
           enhancement: img.enhancement,
+          enhancementStatus: img.enhancementStatus,
+          enhancedUrl: img.enhancedUrl,
         }));
         reorderImages(wizardImages);
       },
@@ -536,14 +657,22 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
     );
 
     /**
-     * Handle enhancement change for an image.
+     * Handle enhancement preset change for an image (CSS preview).
      */
     const handleEnhancementChange = React.useCallback(
       (imageId: string, preset: EnhancementPreset) => {
-        // Update local state
+        // Update local state with preview status
         setAnalyzedImages((prev) =>
           prev.map((img) =>
-            img.id === imageId ? { ...img, enhancement: preset } : img
+            img.id === imageId
+              ? {
+                  ...img,
+                  enhancement: preset,
+                  enhancementStatus: preset === "original" ? "idle" : "previewing",
+                  // Clear enhanced URL if changing preset (need to re-apply)
+                  enhancedUrl: preset === "original" ? undefined : img.enhancedUrl,
+                }
+              : img
           )
         );
 
@@ -551,6 +680,91 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
         updateImageEnhancement(imageId, preset);
       },
       [updateImageEnhancement]
+    );
+
+    /**
+     * Handle applying enhancement via Kie.ai API.
+     */
+    const handleApplyEnhancement = React.useCallback(
+      async (imageId: string) => {
+        const image = analyzedImages.find((img) => img.id === imageId);
+        if (!image || image.enhancement === "original") return;
+
+        setApplyingEnhancementId(imageId);
+        setEnhancementStatus(imageId, "applying");
+
+        try {
+          const response = await fetch("/api/images/enhance", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              imageUrl: image.url,
+              preset: image.enhancement,
+            }),
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || "Enhancement failed");
+          }
+
+          const { enhancedUrl } = await response.json();
+
+          // Update local state
+          setAnalyzedImages((prev) =>
+            prev.map((img) =>
+              img.id === imageId
+                ? { ...img, enhancedUrl, enhancementStatus: "applied" }
+                : img
+            )
+          );
+
+          // Update wizard state
+          setEnhancedUrl(imageId, enhancedUrl);
+        } catch (error) {
+          console.error("Enhancement error:", error);
+          setEnhancementStatus(imageId, "error");
+          // Revert to previewing state after a delay
+          setTimeout(() => {
+            setAnalyzedImages((prev) =>
+              prev.map((img) =>
+                img.id === imageId
+                  ? { ...img, enhancementStatus: "previewing" }
+                  : img
+              )
+            );
+            setEnhancementStatus(imageId, "previewing");
+          }, 2000);
+        } finally {
+          setApplyingEnhancementId(null);
+        }
+      },
+      [analyzedImages, setEnhancementStatus, setEnhancedUrl]
+    );
+
+    /**
+     * Handle reverting enhancement to original.
+     */
+    const handleRevertEnhancement = React.useCallback(
+      (imageId: string) => {
+        // Update local state
+        setAnalyzedImages((prev) =>
+          prev.map((img) =>
+            img.id === imageId
+              ? {
+                  ...img,
+                  enhancement: "original",
+                  enhancementStatus: "idle",
+                  enhancedUrl: undefined,
+                }
+              : img
+          )
+        );
+
+        // Update wizard state
+        revertEnhancement(imageId);
+      },
+      [revertEnhancement]
     );
 
     /**
@@ -570,6 +784,8 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           roomType: img.roomType,
           features: img.features,
           enhancement: img.enhancement,
+          enhancementStatus: img.enhancementStatus,
+          enhancedUrl: img.enhancedUrl,
         }));
         reorderImages(wizardImages);
       },
@@ -592,6 +808,8 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           roomType: img.roomType,
           features: img.features,
           enhancement: img.enhancement,
+          enhancementStatus: img.enhancementStatus,
+          enhancedUrl: img.enhancedUrl,
         }));
         reorderImages(wizardImages);
       },
@@ -704,6 +922,9 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
                   onLabelChange={handleLabelChange}
                   onFeaturesChange={handleFeaturesChange}
                   onEnhancementChange={handleEnhancementChange}
+                  onApplyEnhancement={handleApplyEnhancement}
+                  onRevertEnhancement={handleRevertEnhancement}
+                  applyingId={applyingEnhancementId}
                   onRemove={handleRemoveAnalyzedImage}
                 />
               ))}

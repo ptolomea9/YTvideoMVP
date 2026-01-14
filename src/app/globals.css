@@ -143,3 +143,16 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Enhancement Preview Filters - CSS approximations for instant feedback */
+.enhancement-golden-hour {
+  filter: sepia(0.3) saturate(1.4) brightness(1.1) hue-rotate(-10deg);
+}
+
+.enhancement-hdr {
+  filter: contrast(1.15) brightness(1.05) saturate(1.2);
+}
+
+.enhancement-vivid {
+  filter: saturate(1.5) contrast(1.1) brightness(1.05);
+}
