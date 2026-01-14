@@ -381,6 +381,8 @@ export const ScriptStep = React.forwardRef<ScriptStepHandle>(
               propertyType: propertyData.propertyType || "Luxury Home",
               description: propertyData.description || "",
               features: propertyData.features || [],
+              agentPhone: propertyData.agentPhone || "",
+              agentSocial: propertyData.agentSocial || "",
             },
             images: images.map((img) => ({
               id: img.id,
@@ -433,6 +435,8 @@ export const ScriptStep = React.forwardRef<ScriptStepHandle>(
               propertyType: propertyData.propertyType || "Luxury Home",
               description: propertyData.description || "",
               features: propertyData.features || [],
+              agentPhone: propertyData.agentPhone || "",
+              agentSocial: propertyData.agentSocial || "",
             },
             images: images.map((img) => ({
               id: img.id,

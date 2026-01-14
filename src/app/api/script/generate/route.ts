@@ -46,6 +46,8 @@ interface PropertyInput {
   propertyType: string;
   description: string;
   features: string[]; // Neighborhood POIs
+  agentPhone?: string;
+  agentSocial?: string;
 }
 
 interface ImageInput {
@@ -222,11 +224,22 @@ ${neighborhoodPOIs}
 Goal: Outdoor lifestyle, entertaining potential, and neighborhood conveniences.
 `);
 
-  // Closing section
+  // Closing section - include agent contact if available
+  const agentContactInfo: string[] = [];
+  if (property.agentPhone) {
+    agentContactInfo.push(`Phone: ${property.agentPhone}`);
+  }
+  if (property.agentSocial) {
+    agentContactInfo.push(`Social: ${property.agentSocial}`);
+  }
+  const agentContext = agentContactInfo.length > 0
+    ? `\nAgent contact to reference: ${agentContactInfo.join(", ")}\nNote: A contact card with agent info will appear after this section, so the narration should set up a seamless transition to that visual.`
+    : "";
+
   sectionDescriptions.push(`
 **CLOSING SECTION** (Call-to-Action)
-No images - this wraps up the tour.
-Goal: Compelling summary and CTA with property address. Create urgency.
+No images - this wraps up the tour.${agentContext}
+Goal: Compelling summary and CTA with property address. Create urgency. End with a clear call to action inviting viewers to reach out.
 `);
 
   return `Create a cinematic video narration script for this property:

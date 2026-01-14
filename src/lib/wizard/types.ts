@@ -39,6 +39,9 @@ export interface PropertyData {
   listingPrice: number;
   description: string;
   features: string[];
+  // Agent contact info for video closing
+  agentPhone?: string;
+  agentSocial?: string;
 }
 
 /**

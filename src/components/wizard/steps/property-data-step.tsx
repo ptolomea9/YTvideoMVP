@@ -56,6 +56,9 @@ const propertyDataSchema = z.object({
   lotSizeUnit: z.enum(["sqft", "acres"]).optional(),
   listingPrice: z.number().min(0, "Price must be 0 or more"),
   description: z.string().optional(),
+  // Agent contact info (optional)
+  agentPhone: z.string().optional(),
+  agentSocial: z.string().optional(),
 });
 
 type PropertyFormData = z.infer<typeof propertyDataSchema>;
@@ -105,6 +108,8 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
         lotSizeUnit: state.propertyData.lotSizeUnit || "sqft",
         listingPrice: state.propertyData.listingPrice || 0,
         description: state.propertyData.description || "",
+        agentPhone: state.propertyData.agentPhone || "",
+        agentSocial: state.propertyData.agentSocial || "",
       },
     });
 
@@ -390,6 +395,41 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
               className="min-h-24 focus-visible:ring-primary/50"
               {...register("description")}
             />
+          </div>
+        </div>
+
+        {/* Section: Agent Contact */}
+        <div className="space-y-4">
+          <div>
+            <h3 className="font-heading text-lg font-semibold text-foreground">
+              Agent Contact (Optional)
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Shown at the end of the video as a call-to-action
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="agentPhone">Phone Number</Label>
+              <Input
+                id="agentPhone"
+                type="tel"
+                placeholder="(555) 123-4567"
+                className="focus-visible:ring-primary/50"
+                {...register("agentPhone")}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="agentSocial">Social Handle</Label>
+              <Input
+                id="agentSocial"
+                placeholder="@youragent or instagram.com/youragent"
+                className="focus-visible:ring-primary/50"
+                {...register("agentSocial")}
+              />
+            </div>
           </div>
         </div>
 
