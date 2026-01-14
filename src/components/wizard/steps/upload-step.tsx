@@ -40,41 +40,71 @@ interface AnalyzedImage {
 }
 
 /**
- * Single image card with editable label.
+ * Single image card with editable label and description.
  */
 interface ImageCardProps {
   image: AnalyzedImage;
   onLabelChange: (id: string, label: string) => void;
+  onFeaturesChange: (id: string, features: string[]) => void;
   onRemove: (id: string) => void;
 }
 
-function ImageCard({ image, onLabelChange, onRemove }: ImageCardProps) {
-  const [isEditing, setIsEditing] = React.useState(false);
-  const [editValue, setEditValue] = React.useState(image.label);
-  const inputRef = React.useRef<HTMLInputElement>(null);
+function ImageCard({ image, onLabelChange, onFeaturesChange, onRemove }: ImageCardProps) {
+  const [isEditingLabel, setIsEditingLabel] = React.useState(false);
+  const [isEditingFeatures, setIsEditingFeatures] = React.useState(false);
+  const [labelValue, setLabelValue] = React.useState(image.label);
+  const [featuresValue, setFeaturesValue] = React.useState(image.features.join(" • "));
+  const labelInputRef = React.useRef<HTMLInputElement>(null);
+  const featuresInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
+    if (isEditingLabel && labelInputRef.current) {
+      labelInputRef.current.focus();
+      labelInputRef.current.select();
     }
-  }, [isEditing]);
+  }, [isEditingLabel]);
 
-  const handleSave = () => {
-    if (editValue.trim()) {
-      onLabelChange(image.id, editValue.trim());
-    } else {
-      setEditValue(image.label);
+  React.useEffect(() => {
+    if (isEditingFeatures && featuresInputRef.current) {
+      featuresInputRef.current.focus();
+      featuresInputRef.current.select();
     }
-    setIsEditing(false);
+  }, [isEditingFeatures]);
+
+  const handleSaveLabel = () => {
+    if (labelValue.trim()) {
+      onLabelChange(image.id, labelValue.trim());
+    } else {
+      setLabelValue(image.label);
+    }
+    setIsEditingLabel(false);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleSaveFeatures = () => {
+    const features = featuresValue
+      .split(/[•,]/)
+      .map((f) => f.trim())
+      .filter((f) => f.length > 0);
+    onFeaturesChange(image.id, features);
+    setFeaturesValue(features.join(" • "));
+    setIsEditingFeatures(false);
+  };
+
+  const handleLabelKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
-      handleSave();
+      handleSaveLabel();
     } else if (e.key === "Escape") {
-      setEditValue(image.label);
-      setIsEditing(false);
+      setLabelValue(image.label);
+      setIsEditingLabel(false);
+    }
+  };
+
+  const handleFeaturesKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSaveFeatures();
+    } else if (e.key === "Escape") {
+      setFeaturesValue(image.features.join(" • "));
+      setIsEditingFeatures(false);
     }
   };
 
@@ -104,20 +134,20 @@ function ImageCard({ image, onLabelChange, onRemove }: ImageCardProps) {
 
       {/* Label and features */}
       <div className="flex flex-1 flex-col gap-1">
-        {isEditing ? (
-          <div className="flex items-center gap-2">
-            <Input
-              ref={inputRef}
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              onBlur={handleSave}
-              onKeyDown={handleKeyDown}
-              className="h-8 text-sm font-medium"
-            />
-          </div>
+        {/* Editable label */}
+        {isEditingLabel ? (
+          <Input
+            ref={labelInputRef}
+            value={labelValue}
+            onChange={(e) => setLabelValue(e.target.value)}
+            onBlur={handleSaveLabel}
+            onKeyDown={handleLabelKeyDown}
+            className="h-7 text-sm font-medium"
+            placeholder="Enter label..."
+          />
         ) : (
           <button
-            onClick={() => setIsEditing(true)}
+            onClick={() => setIsEditingLabel(true)}
             className="group/label flex items-center gap-2 text-left"
           >
             <span className="font-medium text-foreground">{image.label}</span>
@@ -125,11 +155,29 @@ function ImageCard({ image, onLabelChange, onRemove }: ImageCardProps) {
           </button>
         )}
 
-        {/* Features preview */}
-        {image.features.length > 0 && (
-          <p className="line-clamp-1 text-xs text-muted-foreground">
-            {image.features.slice(0, 3).join(" • ")}
-          </p>
+        {/* Editable features/description */}
+        {isEditingFeatures ? (
+          <Input
+            ref={featuresInputRef}
+            value={featuresValue}
+            onChange={(e) => setFeaturesValue(e.target.value)}
+            onBlur={handleSaveFeatures}
+            onKeyDown={handleFeaturesKeyDown}
+            className="h-6 text-xs"
+            placeholder="Add features separated by • or comma..."
+          />
+        ) : (
+          <button
+            onClick={() => setIsEditingFeatures(true)}
+            className="group/features flex items-center gap-2 text-left"
+          >
+            <span className="line-clamp-1 text-xs text-muted-foreground">
+              {image.features.length > 0
+                ? image.features.slice(0, 3).join(" • ")
+                : "Click to add description..."}
+            </span>
+            <Pencil className="h-2.5 w-2.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/features:opacity-100" />
+          </button>
         )}
       </div>
 
@@ -386,6 +434,35 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
     );
 
     /**
+     * Handle features change for an image.
+     */
+    const handleFeaturesChange = React.useCallback(
+      (imageId: string, newFeatures: string[]) => {
+        setAnalyzedImages((prev) =>
+          prev.map((img) =>
+            img.id === imageId ? { ...img, features: newFeatures } : img
+          )
+        );
+
+        // Update wizard state
+        const updated = analyzedImages.map((img) =>
+          img.id === imageId ? { ...img, features: newFeatures } : img
+        );
+        const wizardImages: WizardImage[] = updated.map((img, idx) => ({
+          id: img.id,
+          url: img.url,
+          filename: img.filename,
+          order: idx,
+          label: img.label,
+          roomType: img.roomType,
+          features: img.features,
+        }));
+        reorderImages(wizardImages);
+      },
+      [analyzedImages, reorderImages]
+    );
+
+    /**
      * Handle removing an analyzed image.
      */
     const handleRemoveAnalyzedImage = React.useCallback(
@@ -517,7 +594,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
             </div>
 
             <p className="text-sm text-muted-foreground">
-              Click labels to edit • Drag to reorder for video sequence • Labels will be used for narration
+              Click to edit labels &amp; descriptions • Drag to reorder • Used for video narration
             </p>
 
             {/* Reorderable image list */}
@@ -532,6 +609,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
                   key={image.id}
                   image={image}
                   onLabelChange={handleLabelChange}
+                  onFeaturesChange={handleFeaturesChange}
                   onRemove={handleRemoveAnalyzedImage}
                 />
               ))}
