@@ -6,6 +6,7 @@ import { useRef, useState } from 'react';
 import { Loader2, Play } from 'lucide-react';
 import { VideoWithListing, VIDEO_STATUS_CONFIG } from '@/types/video';
 import { cn } from '@/lib/utils';
+import { VideoProgressOverlay } from './VideoProgressOverlay';
 
 interface VideoCardProps {
   video: VideoWithListing;
@@ -33,6 +34,11 @@ export function VideoCard({ video, onSelect }: VideoCardProps) {
   const canPlayVideo = video.status === 'completed' && video.branded_url;
   const isClickable = canPlayVideo && onSelect;
 
+  // Check if video is in-progress or failed (for overlay and disabling hover)
+  const isInProgress = ['pending', 'processing', 'sorting_images', 'generating_motion', 'generating_audio', 'rendering'].includes(video.status);
+  const isFailed = video.status === 'failed';
+  const showOverlay = isInProgress || isFailed;
+
   const handleClick = () => {
     if (isClickable) {
       onSelect();
@@ -40,6 +46,9 @@ export function VideoCard({ video, onSelect }: VideoCardProps) {
   };
 
   const handleMouseEnter = () => {
+    // Don't activate hover effects for in-progress or failed videos
+    if (showOverlay) return;
+
     setIsHovering(true);
     if (canPlayVideo && videoRef.current) {
       setIsVideoLoading(true);
@@ -65,7 +74,7 @@ export function VideoCard({ video, onSelect }: VideoCardProps) {
         'group relative overflow-hidden rounded-xl border border-border bg-card',
         isClickable && 'cursor-pointer'
       )}
-      whileHover={{ scale: 1.02 }}
+      whileHover={showOverlay ? undefined : { scale: 1.02 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -134,14 +143,9 @@ export function VideoCard({ video, onSelect }: VideoCardProps) {
           </div>
         )}
 
-        {/* Processing indicator for in-progress videos */}
-        {video.status !== 'completed' && video.status !== 'pending' && video.status !== 'failed' && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-sm">
-              <Loader2 className="w-4 h-4 text-white animate-spin" />
-              <span className="text-sm text-white font-medium">Processing...</span>
-            </div>
-          </div>
+        {/* Progress overlay for in-progress and failed videos */}
+        {showOverlay && (
+          <VideoProgressOverlay status={video.status} errorMessage={video.error_message} />
         )}
 
         {/* Status badge - top right */}
