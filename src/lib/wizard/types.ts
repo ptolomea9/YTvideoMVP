@@ -39,9 +39,14 @@ export interface PropertyData {
   listingPrice: number;
   description: string;
   features: string[];
-  // Agent contact info for video closing
+  // Agent branding for video closing card
+  agentName?: string;
   agentPhone?: string;
+  agentEmail?: string;
   agentSocial?: string;
+  agentCta?: string;        // Call-to-action text (e.g., "Schedule a Tour")
+  agentLogoUrl?: string;    // Uploaded logo URL
+  agentPhotoUrl?: string;   // Uploaded headshot URL
 }
 
 /**

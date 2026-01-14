@@ -157,6 +157,13 @@ export interface N8nTourVideoPayload {
   preferredTone: string;
   useMusic: "yes" | "no";
   webhookResponse?: string[]; // Script sections for TTS
+  // Agent branding for closing card
+  agentName: string;
+  agentPhone: string;
+  agentEmail: string;
+  agentCta: string;
+  logoUrl: string;
+  headshotUrl: string;
 }
 
 /**
@@ -424,6 +431,13 @@ export function transformWizardToN8n(
     preferredTone: "engaging", // Default tone, could be made configurable
     useMusic: styleOptions.musicEnabled ? "yes" : "no",
     webhookResponse,
+    // Agent branding for closing card
+    agentName: propertyData.agentName || "",
+    agentPhone: propertyData.agentPhone || "",
+    agentEmail: propertyData.agentEmail || "",
+    agentCta: propertyData.agentCta || "Contact Me Today",
+    logoUrl: propertyData.agentLogoUrl || "",
+    headshotUrl: propertyData.agentPhotoUrl || "",
   };
 }
 

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useCallback, KeyboardEvent, useImperativeHandle, forwardRef } from "react";
+import { useState, useCallback, KeyboardEvent, useImperativeHandle, forwardRef, useRef, ChangeEvent } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { X } from "lucide-react";
+import { X, Upload, Loader2 } from "lucide-react";
+import Image from "next/image";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -56,9 +57,12 @@ const propertyDataSchema = z.object({
   lotSizeUnit: z.enum(["sqft", "acres"]).optional(),
   listingPrice: z.number().min(0, "Price must be 0 or more"),
   description: z.string().optional(),
-  // Agent contact info (optional)
+  // Agent branding for closing card (optional)
+  agentName: z.string().optional(),
   agentPhone: z.string().optional(),
+  agentEmail: z.string().email().optional().or(z.literal("")),
   agentSocial: z.string().optional(),
+  agentCta: z.string().optional(),
 });
 
 type PropertyFormData = z.infer<typeof propertyDataSchema>;
@@ -112,13 +116,71 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
         lotSizeUnit: state.propertyData.lotSizeUnit || "acres",
         listingPrice: state.propertyData.listingPrice || 2500000,
         description: state.propertyData.description || "Stunning modern estate with panoramic city views, chef's kitchen, and resort-style pool.",
+        agentName: state.propertyData.agentName || "Jane Smith",
         agentPhone: state.propertyData.agentPhone || "(310) 555-0123",
+        agentEmail: state.propertyData.agentEmail || "jane@luxuryrealty.com",
         agentSocial: state.propertyData.agentSocial || "@luxuryhomes",
+        agentCta: state.propertyData.agentCta || "Schedule a Private Tour",
       },
     });
 
+    // State for agent logo and photo uploads
+    const [agentLogoUrl, setAgentLogoUrl] = useState<string | undefined>(state.propertyData.agentLogoUrl);
+    const [agentPhotoUrl, setAgentPhotoUrl] = useState<string | undefined>(state.propertyData.agentPhotoUrl);
+    const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+    const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+    const logoInputRef = useRef<HTMLInputElement>(null);
+    const photoInputRef = useRef<HTMLInputElement>(null);
+
     const propertyType = watch("propertyType");
     const lotSizeUnit = watch("lotSizeUnit");
+
+    /**
+     * Handle branding image upload.
+     */
+    const handleBrandingUpload = useCallback(
+      async (file: File, type: "logo" | "photo") => {
+        const setUploading = type === "logo" ? setIsUploadingLogo : setIsUploadingPhoto;
+        const setUrl = type === "logo" ? setAgentLogoUrl : setAgentPhotoUrl;
+
+        setUploading(true);
+        try {
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("type", type);
+
+          const response = await fetch("/api/branding/upload", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) {
+            throw new Error("Upload failed");
+          }
+
+          const { url } = await response.json();
+          setUrl(url);
+        } catch (error) {
+          console.error(`Error uploading ${type}:`, error);
+        } finally {
+          setUploading(false);
+        }
+      },
+      []
+    );
+
+    /**
+     * Handle file input change for branding images.
+     */
+    const handleFileChange = useCallback(
+      (e: ChangeEvent<HTMLInputElement>, type: "logo" | "photo") => {
+        const file = e.target.files?.[0];
+        if (file) {
+          handleBrandingUpload(file, type);
+        }
+      },
+      [handleBrandingUpload]
+    );
 
     /**
      * Handle form submission - save to wizard context.
@@ -128,11 +190,13 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
         const propertyData: Partial<PropertyData> = {
           ...data,
           features: pois,
+          agentLogoUrl,
+          agentPhotoUrl,
         };
         setPropertyData(propertyData);
         return true;
       },
-      [pois, setPropertyData]
+      [pois, agentLogoUrl, agentPhotoUrl, setPropertyData]
     );
 
     /**
@@ -402,17 +466,42 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
           </div>
         </div>
 
-        {/* Section: Agent Contact */}
+        {/* Section: Agent Branding */}
         <div className="space-y-4">
           <div>
             <h3 className="font-heading text-lg font-semibold text-foreground">
-              Agent Contact (Optional)
+              Agent Branding (Optional)
             </h3>
             <p className="text-sm text-muted-foreground">
-              Shown at the end of the video as a call-to-action
+              Shown on the closing card at the end of the video
             </p>
           </div>
 
+          {/* Agent Name & Email */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="agentName">Agent Name</Label>
+              <Input
+                id="agentName"
+                placeholder="Jane Smith"
+                className="focus-visible:ring-primary/50"
+                {...register("agentName")}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="agentEmail">Email</Label>
+              <Input
+                id="agentEmail"
+                type="email"
+                placeholder="jane@realty.com"
+                className="focus-visible:ring-primary/50"
+                {...register("agentEmail")}
+              />
+            </div>
+          </div>
+
+          {/* Phone & Social */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="agentPhone">Phone Number</Label>
@@ -429,10 +518,112 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
               <Label htmlFor="agentSocial">Social Handle</Label>
               <Input
                 id="agentSocial"
-                placeholder="@youragent or instagram.com/youragent"
+                placeholder="@youragent"
                 className="focus-visible:ring-primary/50"
                 {...register("agentSocial")}
               />
+            </div>
+          </div>
+
+          {/* Call-to-Action */}
+          <div className="space-y-2">
+            <Label htmlFor="agentCta">Call-to-Action Text</Label>
+            <Input
+              id="agentCta"
+              placeholder="Schedule a Private Tour"
+              className="focus-visible:ring-primary/50"
+              {...register("agentCta")}
+            />
+            <p className="text-xs text-muted-foreground">
+              Displayed prominently on the closing card
+            </p>
+          </div>
+
+          {/* Logo & Photo Uploads */}
+          <div className="space-y-2">
+            <Label>Logo & Headshot (Optional)</Label>
+            <div className="grid grid-cols-2 gap-4">
+              {/* Logo Upload */}
+              <div
+                className="group relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/30 p-4 transition-colors hover:border-primary/50 hover:bg-muted/50 cursor-pointer min-h-[120px]"
+                onClick={() => logoInputRef.current?.click()}
+              >
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => handleFileChange(e, "logo")}
+                />
+                {isUploadingLogo ? (
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                ) : agentLogoUrl ? (
+                  <div className="relative w-full h-20">
+                    <Image
+                      src={agentLogoUrl}
+                      alt="Agent logo"
+                      fill
+                      className="object-contain"
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAgentLogoUrl(undefined);
+                      }}
+                      className="absolute -top-2 -right-2 rounded-full bg-destructive p-1 text-destructive-foreground hover:bg-destructive/80"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="h-6 w-6 text-muted-foreground mb-2" />
+                    <span className="text-sm text-muted-foreground">Logo</span>
+                  </>
+                )}
+              </div>
+
+              {/* Photo Upload */}
+              <div
+                className="group relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/30 p-4 transition-colors hover:border-primary/50 hover:bg-muted/50 cursor-pointer min-h-[120px]"
+                onClick={() => photoInputRef.current?.click()}
+              >
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => handleFileChange(e, "photo")}
+                />
+                {isUploadingPhoto ? (
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                ) : agentPhotoUrl ? (
+                  <div className="relative w-20 h-20">
+                    <Image
+                      src={agentPhotoUrl}
+                      alt="Agent headshot"
+                      fill
+                      className="object-cover rounded-full"
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAgentPhotoUrl(undefined);
+                      }}
+                      className="absolute -top-2 -right-2 rounded-full bg-destructive p-1 text-destructive-foreground hover:bg-destructive/80"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="h-6 w-6 text-muted-foreground mb-2" />
+                    <span className="text-sm text-muted-foreground">Photo</span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
