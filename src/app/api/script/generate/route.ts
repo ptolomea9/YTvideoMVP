@@ -20,11 +20,11 @@ function getOpenAI(): OpenAI {
 /**
  * Section configuration for grouping images and generating narrative.
  *
- * Flow: Exterior → Interior common areas → Outdoor (backyard) → Private spaces → Closing
- * This creates a natural tour progression from broad to narrow:
+ * Flow: Exterior → Outdoor → Living spaces → Private spaces → Closing
+ * This creates a natural tour progression:
  * - Approach the house (curb appeal)
+ * - Show the grounds/outdoor spaces
  * - Enter and explore living spaces
- * - Step outside to backyard/patio
  * - Retreat to private bedrooms/bathrooms
  * - Call to action
  */
@@ -34,8 +34,8 @@ const SECTION_CONFIG: {
   roomTypes: RoomType[];
 }[] = [
   { type: "opening", title: "Opening", roomTypes: ["exterior"] },
-  { type: "living", title: "Living Spaces", roomTypes: ["entry", "living", "kitchen", "dining"] },
   { type: "outdoor", title: "Outdoor Living", roomTypes: ["outdoor"] },
+  { type: "living", title: "Living Spaces", roomTypes: ["entry", "living", "kitchen", "dining"] },
   { type: "private", title: "Private Retreat", roomTypes: ["master_bedroom", "bedroom", "bathroom"] },
   { type: "closing", title: "Closing", roomTypes: [] }, // No images, CTA only
 ];
@@ -196,7 +196,7 @@ function buildScriptPrompt(
   // Build section context
   const sectionDescriptions: string[] = [];
 
-  // Opening section
+  // Opening section (Exterior)
   const openingImages = sectionGroups.get("opening") || [];
   sectionDescriptions.push(`
 **OPENING SECTION** (Exterior/Curb Appeal)
@@ -204,15 +204,7 @@ Images: ${openingImages.length > 0 ? openingImages.map((img) => `"${img.label}" 
 Goal: Attention-grabbing hook with property type and standout exterior feature. Set the tone.
 `);
 
-  // Living section
-  const livingImages = sectionGroups.get("living") || [];
-  sectionDescriptions.push(`
-**LIVING SPACES SECTION** (Entry, Living, Kitchen, Dining)
-Images: ${livingImages.length > 0 ? livingImages.map((img) => `"${img.label}" (${img.features.join(", ")})`).join("; ") : "None"}
-Goal: Flow through main living areas, referencing specific image labels and features naturally. Transition from the entry through the open-concept spaces.
-`);
-
-  // Outdoor section - comes BEFORE private spaces in the tour flow
+  // Outdoor section - comes RIGHT AFTER exterior, before entering the house
   // Emphasize POIs must be mentioned
   const outdoorImages = sectionGroups.get("outdoor") || [];
   const neighborhoodPOIs = property.features.length > 0
@@ -223,15 +215,23 @@ These nearby amenities are key selling points. Weave them naturally into the nar
   sectionDescriptions.push(`
 **OUTDOOR LIVING SECTION** (Backyard, Patio, Pool, Amenities)
 Images: ${outdoorImages.length > 0 ? outdoorImages.map((img) => `"${img.label}" (${img.features.join(", ")})`).join("; ") : "None"}${neighborhoodPOIs}
-Goal: Outdoor lifestyle and entertaining potential. Transition naturally from interior living spaces to the backyard oasis. Also mention neighborhood conveniences and location advantages.
+Goal: Showcase the grounds and outdoor lifestyle right after the exterior. Highlight entertaining potential, pool, patio features. Mention neighborhood conveniences and location advantages.
 `);
 
-  // Private section - comes AFTER outdoor in the tour flow (broad to narrow)
+  // Living section - after showing the grounds, we enter the house
+  const livingImages = sectionGroups.get("living") || [];
+  sectionDescriptions.push(`
+**LIVING SPACES SECTION** (Entry, Living, Kitchen, Dining)
+Images: ${livingImages.length > 0 ? livingImages.map((img) => `"${img.label}" (${img.features.join(", ")})`).join("; ") : "None"}
+Goal: Now step inside the home. Flow through main living areas, referencing specific image labels and features naturally. Transition from the entry through the open-concept spaces.
+`);
+
+  // Private section - bedrooms and bathrooms last
   const privateImages = sectionGroups.get("private") || [];
   sectionDescriptions.push(`
-**PRIVATE RETREAT SECTION** (Bedrooms, Bathrooms)
+**PRIVATE RETREAT SECTION** (Master Bedroom, Bedrooms, Bathrooms)
 Images: ${privateImages.length > 0 ? privateImages.map((img) => `"${img.label}" (${img.features.join(", ")})`).join("; ") : "None"}
-Goal: Intimate, restful spaces. Transition from outdoor back inside to the private quarters. Highlight master suite and spa-like features. End this section setting up the closing CTA.
+Goal: Intimate, restful spaces. Highlight master suite first, then other bedrooms, then spa-like bathroom features. End this section setting up the closing CTA.
 `);
 
   // Closing section - include agent contact if available
@@ -275,15 +275,15 @@ ${sectionDescriptions.join("\n")}
 
 **OUTPUT FORMAT:**
 Return a JSON object with a "sections" array containing 5 objects, each with:
-- "type": the section type (opening, living, private, outdoor, closing)
+- "type": the section type (opening, outdoor, living, private, closing)
 - "content": the narration text for that section
 
 Example:
 {
   "sections": [
     {"type": "opening", "content": "Welcome to..."},
+    {"type": "outdoor", "content": "The grounds feature..."},
     {"type": "living", "content": "Step inside..."},
-    {"type": "outdoor", "content": "Step outside to..."},
     {"type": "private", "content": "Retreat to..."},
     {"type": "closing", "content": "Don't miss..."}
   ]

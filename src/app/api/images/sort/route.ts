@@ -55,14 +55,14 @@ export async function POST(request: NextRequest) {
     if (!process.env.OPENAI_API_KEY) {
       console.warn("OPENAI_API_KEY not set, returning mock analysis");
       // Return mock analysis for development/testing
-      // Order: exterior → entry → living → kitchen → outdoor → bedrooms → bathrooms
+      // Order: exterior → outdoor → living → dining → master bedroom → bedrooms → bathrooms
       const mockLabels = [
         { label: "Elegant Front Exterior", roomType: "exterior", features: ["Grand entrance", "Manicured lawn"] },
-        { label: "Welcoming Foyer", roomType: "entry", features: ["High ceilings", "Natural light"] },
+        { label: "Private Backyard Oasis", roomType: "outdoor", features: ["Pool", "Covered patio"] },
         { label: "Spacious Living Room", roomType: "living", features: ["Open concept", "Fireplace"] },
         { label: "Gourmet Kitchen", roomType: "kitchen", features: ["Granite counters", "Stainless appliances"] },
-        { label: "Private Backyard Oasis", roomType: "outdoor", features: ["Pool", "Covered patio"] },
         { label: "Master Suite Retreat", roomType: "master_bedroom", features: ["En-suite bathroom", "Walk-in closet"] },
+        { label: "Spa-Like Bathroom", roomType: "bathroom", features: ["Soaking tub", "Double vanity"] },
       ];
       const mockAnalyzed = validUrls.map((img, idx) => ({
         url: img.url,
@@ -76,19 +76,18 @@ export async function POST(request: NextRequest) {
     const analyzed = await analyzeImages(validUrls);
 
     // Sort by room type order for video sequence
-    // Flow: Exterior (curb appeal) → Interior common areas → Outdoor (backyard) → Private spaces
-    // This creates a natural tour: approach house → enter → explore living spaces → step outside → retreat to bedrooms
+    // Flow: Exterior → Outdoor → Living spaces → Private spaces
     const roomTypeOrder: RoomType[] = [
-      "exterior",      // Front of house - curb appeal
-      "entry",         // Step inside - foyer/entryway
-      "living",        // Main living area
-      "kitchen",       // Kitchen
-      "dining",        // Dining area
-      "outdoor",       // Backyard/patio - before private spaces
+      "exterior",       // Front of house - curb appeal
+      "outdoor",        // Backyard/patio - show grounds early
+      "entry",          // Step inside - foyer/entryway
+      "living",         // Main living area
+      "kitchen",        // Kitchen
+      "dining",         // Dining area
       "master_bedroom", // Master suite
-      "bedroom",       // Other bedrooms
-      "bathroom",      // Bathrooms
-      "other",         // Miscellaneous
+      "bedroom",        // Other bedrooms
+      "bathroom",       // Bathrooms
+      "other",          // Miscellaneous
     ];
 
     const sorted = [...analyzed].sort((a, b) => {
