@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { PropertyData, WizardImage, ScriptSection, StyleOptions } from "@/lib/wizard/types";
+import { transformWizardToN8n, buildWebhookUrl } from "@/lib/n8n";
 
 /**
  * POST /api/listings/create
@@ -105,7 +106,17 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create video record
+    // Transform wizard data to n8n payload format
+    const n8nPayload = transformWizardToN8n(
+      propertyData,
+      images,
+      scriptSections,
+      styleOptions,
+      user.email || ""
+    );
+    const webhookUrl = buildWebhookUrl("tourVideo");
+
+    // Create video record with n8n payload for debugging
     const { data: video, error: videoError } = await supabase
       .from("videos")
       .insert({
@@ -122,6 +133,9 @@ export async function POST(request: Request) {
         })),
         voice_id: styleOptions.voiceId,
         music_enabled: styleOptions.musicEnabled,
+        mls_dual_output: styleOptions.mlsDualOutput,
+        n8n_payload: n8nPayload,
+        n8n_webhook_url: webhookUrl,
       })
       .select()
       .single();
@@ -140,6 +154,8 @@ export async function POST(request: Request) {
       success: true,
       listingId: listing.id,
       videoId: video.id,
+      n8nWebhookUrl: webhookUrl,
+      // Note: n8n webhook trigger will be added in 03-02
     });
   } catch (error) {
     console.error("Submission error:", error);
