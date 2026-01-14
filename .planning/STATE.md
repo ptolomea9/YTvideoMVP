@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-01-13)
 ## Current Position
 
 Phase: 2 of 6 (Create Wizard)
-Plan: 1 of 5 in current phase
+Plan: 2 of 5 in current phase
 Status: In progress
-Last activity: 2026-01-13 — Completed 02-01-PLAN.md (Wizard Shell)
+Last activity: 2026-01-13 — Completed 02-02-PLAN.md (Property Data Step)
 
-Progress: ███████████░░░░░░░░░ 22%
+Progress: █████████████░░░░░░░ 27%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
+- Total plans completed: 5
 - Average duration: 8 min
-- Total execution time: 0.50 hours
+- Total execution time: 0.63 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1. Foundation | 3/3 ✓ | 18 min | 6 min |
-| 2. Create Wizard | 1/5 | 12 min | 12 min |
+| 2. Create Wizard | 2/5 | 20 min | 10 min |
 
 **Recent Trend:**
-- Last 5 plans: 12m, 2m, 4m, 12m
+- Last 5 plans: 12m, 2m, 4m, 12m, 8m
 - Trend: Stable
 
 ## Accumulated Context
@@ -49,6 +49,8 @@ Recent decisions affecting current work:
 - Videos table has no DELETE policy (audit trail)
 - useReducer for wizard state (predictable transitions)
 - Serializable wizard state only (URLs not File objects)
+- react-hook-form with Zod for form validation
+- forwardRef + useImperativeHandle for parent validation control
 
 ### Deferred Issues
 
@@ -61,5 +63,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-13
-Stopped at: Completed 02-01-PLAN.md (Wizard Shell)
+Stopped at: Completed 02-02-PLAN.md (Property Data Step)
 Resume file: None
