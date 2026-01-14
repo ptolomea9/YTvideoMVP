@@ -54,7 +54,7 @@ export function VideoProgressOverlay({ status, errorMessage, address }: VideoPro
   // Failed state - show error overlay
   if (isFailed) {
     return (
-      <div className="absolute inset-0 flex flex-col bg-black/70 z-20">
+      <div className="absolute inset-0 flex flex-col bg-black/70 z-20 pointer-events-none">
         {/* Address at top */}
         {address && (
           <div className="p-3 bg-gradient-to-b from-black/50 to-transparent">
@@ -83,7 +83,7 @@ export function VideoProgressOverlay({ status, errorMessage, address }: VideoPro
 
   // In-progress state - show progress overlay
   return (
-    <div className="absolute inset-0 flex flex-col bg-black/70 z-20">
+    <div className="absolute inset-0 flex flex-col bg-black/70 z-20 pointer-events-none">
       {/* Address at top */}
       {address && (
         <div className="p-3 bg-gradient-to-b from-black/50 to-transparent">

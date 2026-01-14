@@ -191,7 +191,7 @@ export function VideoCard({ video, onSelect, onDelete }: VideoCardProps) {
 
         {/* Delete button - top left, visible on hover */}
         {onDelete && (
-          <div className="absolute top-3 left-3 z-20">
+          <div className="absolute top-3 left-3 z-30">
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <button
@@ -199,8 +199,7 @@ export function VideoCard({ video, onSelect, onDelete }: VideoCardProps) {
                   disabled={isDeleting}
                   className={cn(
                     'p-2 rounded-full bg-black/50 hover:bg-destructive/80 transition-colors backdrop-blur-sm',
-                    'opacity-0 group-hover:opacity-100',
-                    'focus:outline-none focus:opacity-100',
+                    'focus:outline-none',
                     isDeleting && 'opacity-50 cursor-not-allowed'
                   )}
                   aria-label="Delete video"
