@@ -299,7 +299,7 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div className="space-y-2">
               <Label htmlFor="bedrooms">Bedrooms</Label>
               <Input
@@ -332,7 +332,7 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="squareFeet">Square Feet</Label>
+              <Label htmlFor="squareFeet">Sq Ft</Label>
               <Input
                 id="squareFeet"
                 type="number"
@@ -345,19 +345,17 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
                 <p className="text-sm text-destructive">{errors.squareFeet.message}</p>
               )}
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="lotSize">Lot Size (optional)</Label>
-              <div className="flex gap-2">
+              <Label htmlFor="lotSize">Lot Size</Label>
+              <div className="flex gap-1">
                 <Input
                   id="lotSize"
                   type="number"
                   min="0"
                   step="0.01"
                   placeholder={lotSizeUnit === "acres" ? "0.25" : "10890"}
-                  className="flex-1 focus-visible:ring-primary/50"
+                  className="min-w-0 flex-1 focus-visible:ring-primary/50"
                   {...register("lotSize", { valueAsNumber: true })}
                 />
                 <Select
@@ -366,7 +364,7 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
                     setValue("lotSizeUnit", value, { shouldValidate: true })
                   }
                 >
-                  <SelectTrigger className="w-24 focus-visible:ring-primary/50">
+                  <SelectTrigger className="w-[70px] shrink-0 focus-visible:ring-primary/50">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
