@@ -1,152 +1,151 @@
 "use client";
 
 import * as React from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Loader2, ChevronDown, ChevronRight, GripVertical, Check } from "lucide-react";
+import { motion, AnimatePresence, Reorder } from "framer-motion";
+import { Sparkles, Loader2, GripVertical, Check, Pencil, X } from "lucide-react";
 import { nanoid } from "nanoid";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Dropzone, ImagePreviewGrid, type ImagePreview } from "@/components/ui/dropzone";
 import { cn } from "@/lib/utils";
 import { useWizard } from "@/lib/wizard/wizard-context";
-import type { WizardImage } from "@/lib/wizard/types";
+import type { WizardImage, RoomType } from "@/lib/wizard/types";
 
 /**
- * Image category types for GPT-4o Vision classification.
+ * Room type labels for display.
  */
-export type ImageCategory =
-  | "exterior"
-  | "entry"
-  | "living"
-  | "bedroom"
-  | "bathroom"
-  | "yard"
-  | "other";
-
-export const CATEGORY_LABELS: Record<ImageCategory, string> = {
+const ROOM_TYPE_LABELS: Record<RoomType, string> = {
   exterior: "Exterior",
   entry: "Entry",
-  living: "Living Room",
+  living: "Living",
+  kitchen: "Kitchen",
+  dining: "Dining",
+  master_bedroom: "Master",
   bedroom: "Bedroom",
-  bathroom: "Bathroom",
-  yard: "Yard/Outdoor",
+  bathroom: "Bath",
+  outdoor: "Outdoor",
   other: "Other",
 };
 
-export const CATEGORY_ORDER: ImageCategory[] = [
-  "exterior",
-  "entry",
-  "living",
-  "bedroom",
-  "bathroom",
-  "yard",
-  "other",
-];
-
 /**
- * Image with category after sorting.
+ * Analyzed image from API response.
  */
-export interface CategorizedImage {
+interface AnalyzedImage {
   id: string;
   url: string;
   filename: string;
-  category: ImageCategory;
-  order: number;
-}
-
-interface CategorySectionProps {
-  category: ImageCategory;
-  images: CategorizedImage[];
-  onMoveImage: (imageId: string, newCategory: ImageCategory) => void;
-  isExpanded: boolean;
-  onToggle: () => void;
+  label: string;
+  roomType: RoomType;
+  features: string[];
 }
 
 /**
- * Collapsible section for a category of images.
+ * Single image card with editable label.
  */
-function CategorySection({
-  category,
-  images,
-  onMoveImage,
-  isExpanded,
-  onToggle,
-}: CategorySectionProps) {
-  if (images.length === 0) return null;
+interface ImageCardProps {
+  image: AnalyzedImage;
+  onLabelChange: (id: string, label: string) => void;
+  onRemove: (id: string) => void;
+}
+
+function ImageCard({ image, onLabelChange, onRemove }: ImageCardProps) {
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [editValue, setEditValue] = React.useState(image.label);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  const handleSave = () => {
+    if (editValue.trim()) {
+      onLabelChange(image.id, editValue.trim());
+    } else {
+      setEditValue(image.label);
+    }
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSave();
+    } else if (e.key === "Escape") {
+      setEditValue(image.label);
+      setIsEditing(false);
+    }
+  };
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border/50 bg-card">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-muted/50"
-      >
-        <div className="flex items-center gap-2">
-          {isExpanded ? (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          )}
-          <span className="font-medium text-foreground">
-            {CATEGORY_LABELS[category]}
-          </span>
-          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
-            {images.length}
-          </span>
+    <Reorder.Item
+      value={image}
+      className="group flex items-center gap-4 rounded-lg border border-border/50 bg-card p-3 hover:border-border"
+    >
+      {/* Drag handle */}
+      <div className="cursor-grab text-muted-foreground hover:text-foreground">
+        <GripVertical className="h-5 w-5" />
+      </div>
+
+      {/* Thumbnail */}
+      <div className="relative h-20 w-28 flex-shrink-0 overflow-hidden rounded-md bg-muted">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={image.url}
+          alt={image.label}
+          className="h-full w-full object-cover"
+        />
+        {/* Room type badge */}
+        <div className="absolute bottom-1 left-1 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-medium text-foreground">
+          {ROOM_TYPE_LABELS[image.roomType]}
         </div>
-      </button>
-      <AnimatePresence>
-        {isExpanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
+      </div>
+
+      {/* Label and features */}
+      <div className="flex flex-1 flex-col gap-1">
+        {isEditing ? (
+          <div className="flex items-center gap-2">
+            <Input
+              ref={inputRef}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSave}
+              onKeyDown={handleKeyDown}
+              className="h-8 text-sm font-medium"
+            />
+          </div>
+        ) : (
+          <button
+            onClick={() => setIsEditing(true)}
+            className="group/label flex items-center gap-2 text-left"
           >
-            <div className="grid grid-cols-2 gap-3 border-t border-border/50 p-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-              {images.map((image) => (
-                <div
-                  key={image.id}
-                  className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-border/50 bg-muted"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={image.url}
-                    alt={image.filename}
-                    className="h-full w-full object-cover"
-                  />
-                  {/* Category reassign dropdown */}
-                  <div className="absolute right-1 top-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <select
-                      value={category}
-                      onChange={(e) =>
-                        onMoveImage(image.id, e.target.value as ImageCategory)
-                      }
-                      className="rounded border border-border bg-background/90 px-2 py-1 text-xs backdrop-blur"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {CATEGORY_ORDER.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {CATEGORY_LABELS[cat]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {/* Drag handle indicator */}
-                  <div className="absolute left-1 top-1 rounded bg-background/80 p-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <GripVertical className="h-3 w-3 text-muted-foreground" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
+            <span className="font-medium text-foreground">{image.label}</span>
+            <Pencil className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover/label:opacity-100" />
+          </button>
         )}
-      </AnimatePresence>
-    </div>
+
+        {/* Features preview */}
+        {image.features.length > 0 && (
+          <p className="line-clamp-1 text-xs text-muted-foreground">
+            {image.features.slice(0, 3).join(" • ")}
+          </p>
+        )}
+      </div>
+
+      {/* Remove button */}
+      <button
+        onClick={() => onRemove(image.id)}
+        className="rounded-full p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </Reorder.Item>
   );
 }
 
 /**
- * Scanning animation component for AI classification.
+ * Scanning animation component for AI analysis.
  */
 function ScanningAnimation() {
   return (
@@ -177,7 +176,7 @@ function ScanningAnimation() {
         transition={{ delay: 0.2 }}
         className="mt-6 font-heading text-lg font-medium text-foreground"
       >
-        Analyzing Images with AI
+        Analyzing Your Photos
       </motion.p>
       <motion.p
         initial={{ opacity: 0 }}
@@ -185,7 +184,7 @@ function ScanningAnimation() {
         transition={{ delay: 0.4 }}
         className="mt-2 text-sm text-muted-foreground"
       >
-        GPT-4o Vision is categorizing your photos...
+        GPT-4o Vision is identifying rooms and notable features...
       </motion.p>
     </motion.div>
   );
@@ -200,48 +199,41 @@ export interface UploadStepHandle {
  *
  * Features:
  * - Drag-and-drop image upload
- * - Preview grid with remove functionality
- * - GPT-4o Vision sorting into categories
- * - Category display with reassignment
+ * - GPT-4o Vision analysis with descriptive labels
+ * - Editable labels for each image
+ * - Drag-to-reorder for video sequence
+ * - Labels and features pass to script generation
  */
 export const UploadStep = React.forwardRef<UploadStepHandle>(
   function UploadStep(_, ref) {
     const { state, addImages, reorderImages } = useWizard();
     const [localImages, setLocalImages] = React.useState<ImagePreview[]>([]);
-    const [isSorting, setIsSorting] = React.useState(false);
-    const [sortedImages, setSortedImages] = React.useState<CategorizedImage[]>(
-      []
-    );
-    const [expandedCategories, setExpandedCategories] = React.useState<
-      Set<ImageCategory>
-    >(new Set(CATEGORY_ORDER));
-    const [sortError, setSortError] = React.useState<string | null>(null);
-    const [hasBeenSorted, setHasBeenSorted] = React.useState(false);
+    const [isAnalyzing, setIsAnalyzing] = React.useState(false);
+    const [analyzedImages, setAnalyzedImages] = React.useState<AnalyzedImage[]>([]);
+    const [analyzeError, setAnalyzeError] = React.useState<string | null>(null);
+    const [hasBeenAnalyzed, setHasBeenAnalyzed] = React.useState(false);
 
     // Check if we have images in wizard state already (returning to step)
     React.useEffect(() => {
-      if (state.images.length > 0 && sortedImages.length === 0) {
-        // Convert wizard images back to categorized format
-        const existingImages: CategorizedImage[] = state.images.map(
-          (img, idx) => ({
-            id: img.id,
-            url: img.url,
-            filename: img.filename,
-            category: (img.caption as ImageCategory) || "other",
-            order: img.order,
-          })
-        );
-        setSortedImages(existingImages);
-        setHasBeenSorted(true);
+      if (state.images.length > 0 && analyzedImages.length === 0) {
+        const existingImages: AnalyzedImage[] = state.images.map((img) => ({
+          id: img.id,
+          url: img.url,
+          filename: img.filename,
+          label: img.label,
+          roomType: img.roomType,
+          features: img.features,
+        }));
+        setAnalyzedImages(existingImages);
+        setHasBeenAnalyzed(true);
       }
-    }, [state.images, sortedImages.length]);
+    }, [state.images, analyzedImages.length]);
 
     // Expose validate method to parent
     React.useImperativeHandle(ref, () => ({
       validate: async () => {
-        // Must have sorted images to proceed
-        if (sortedImages.length === 0) {
-          setSortError("Please upload and sort images before continuing.");
+        if (analyzedImages.length === 0) {
+          setAnalyzeError("Please upload and analyze images before continuing.");
           return false;
         }
         return true;
@@ -258,20 +250,18 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
         preview: URL.createObjectURL(file),
       }));
       setLocalImages((prev) => {
-        // Limit to 20 total images
         const combined = [...prev, ...newImages];
         return combined.slice(0, 20);
       });
-      // Clear any previous sort results when adding new images
-      setSortedImages([]);
-      setHasBeenSorted(false);
-      setSortError(null);
+      setAnalyzedImages([]);
+      setHasBeenAnalyzed(false);
+      setAnalyzeError(null);
     }, []);
 
     /**
      * Handle removing an image from the local preview.
      */
-    const handleRemoveImage = React.useCallback((id: string) => {
+    const handleRemoveLocalImage = React.useCallback((id: string) => {
       setLocalImages((prev) => {
         const image = prev.find((img) => img.id === id);
         if (image) {
@@ -282,144 +272,161 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
     }, []);
 
     /**
-     * Sort images using GPT-4o Vision API.
+     * Analyze images using GPT-4o Vision API.
      */
-    const handleSortImages = async () => {
+    const handleAnalyzeImages = async () => {
       if (localImages.length === 0) {
-        setSortError("Please add images first.");
+        setAnalyzeError("Please add images first.");
         return;
       }
 
-      setIsSorting(true);
-      setSortError(null);
+      setIsAnalyzing(true);
+      setAnalyzeError(null);
 
       try {
-        // Upload images to Supabase Storage and get URLs
+        // Upload images to Supabase Storage
         const formData = new FormData();
-        localImages.forEach((img, idx) => {
-          formData.append(`images`, img.file);
+        localImages.forEach((img) => {
+          formData.append("images", img.file);
         });
 
-        // First, upload to Supabase Storage
         const uploadResponse = await fetch("/api/images/upload", {
           method: "POST",
           body: formData,
         });
 
         if (!uploadResponse.ok) {
-          throw new Error("Failed to upload images");
+          const error = await uploadResponse.json();
+          throw new Error(error.error || "Failed to upload images");
         }
 
         const { urls } = await uploadResponse.json();
 
-        // Then, sort with GPT-4o Vision
-        const sortResponse = await fetch("/api/images/sort", {
+        // Analyze with GPT-4o Vision
+        const analyzeResponse = await fetch("/api/images/sort", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ imageUrls: urls }),
         });
 
-        if (!sortResponse.ok) {
-          throw new Error("Failed to classify images");
+        if (!analyzeResponse.ok) {
+          const error = await analyzeResponse.json();
+          throw new Error(error.error || "Failed to analyze images");
         }
 
-        const { categorized } = await sortResponse.json();
+        const { analyzed } = await analyzeResponse.json();
 
         // Map response to our format
-        const sorted: CategorizedImage[] = categorized.map(
-          (item: { url: string; category: string; filename: string }, idx: number) => ({
+        const images: AnalyzedImage[] = analyzed.map(
+          (item: { url: string; filename: string; label: string; roomType: RoomType; features: string[] }, idx: number) => ({
             id: nanoid(),
             url: item.url,
             filename: item.filename || `image-${idx + 1}`,
-            category: item.category as ImageCategory,
-            order: idx,
+            label: item.label,
+            roomType: item.roomType,
+            features: item.features || [],
           })
         );
 
-        setSortedImages(sorted);
-        setHasBeenSorted(true);
+        setAnalyzedImages(images);
+        setHasBeenAnalyzed(true);
 
-        // Update wizard state with sorted images
-        const wizardImages: WizardImage[] = sorted.map((img, idx) => ({
+        // Update wizard state
+        const wizardImages: WizardImage[] = images.map((img, idx) => ({
           id: img.id,
           url: img.url,
           filename: img.filename,
           order: idx,
-          caption: img.category, // Store category in caption for now
+          label: img.label,
+          roomType: img.roomType,
+          features: img.features,
         }));
-
         addImages(wizardImages);
 
-        // Clear local images since they're now uploaded
+        // Clear local images
         localImages.forEach((img) => URL.revokeObjectURL(img.preview));
         setLocalImages([]);
       } catch (error) {
-        console.error("Sort error:", error);
-        setSortError(
-          error instanceof Error ? error.message : "Failed to sort images"
+        console.error("Analysis error:", error);
+        setAnalyzeError(
+          error instanceof Error ? error.message : "Failed to analyze images"
         );
       } finally {
-        setIsSorting(false);
+        setIsAnalyzing(false);
       }
     };
 
     /**
-     * Move an image to a different category.
+     * Handle label change for an image.
      */
-    const handleMoveImage = React.useCallback(
-      (imageId: string, newCategory: ImageCategory) => {
-        setSortedImages((prev) =>
+    const handleLabelChange = React.useCallback(
+      (imageId: string, newLabel: string) => {
+        setAnalyzedImages((prev) =>
           prev.map((img) =>
-            img.id === imageId ? { ...img, category: newCategory } : img
+            img.id === imageId ? { ...img, label: newLabel } : img
           )
         );
 
-        // Also update wizard state
-        const updated = sortedImages.map((img) =>
-          img.id === imageId ? { ...img, category: newCategory } : img
+        // Update wizard state
+        const updated = analyzedImages.map((img) =>
+          img.id === imageId ? { ...img, label: newLabel } : img
         );
         const wizardImages: WizardImage[] = updated.map((img, idx) => ({
           id: img.id,
           url: img.url,
           filename: img.filename,
           order: idx,
-          caption: img.category,
+          label: img.label,
+          roomType: img.roomType,
+          features: img.features,
         }));
         reorderImages(wizardImages);
       },
-      [reorderImages, sortedImages]
+      [analyzedImages, reorderImages]
     );
 
     /**
-     * Toggle category expansion.
+     * Handle removing an analyzed image.
      */
-    const toggleCategory = (category: ImageCategory) => {
-      setExpandedCategories((prev) => {
-        const next = new Set(prev);
-        if (next.has(category)) {
-          next.delete(category);
-        } else {
-          next.add(category);
-        }
-        return next;
-      });
-    };
+    const handleRemoveAnalyzedImage = React.useCallback(
+      (imageId: string) => {
+        const updated = analyzedImages.filter((img) => img.id !== imageId);
+        setAnalyzedImages(updated);
+
+        const wizardImages: WizardImage[] = updated.map((img, idx) => ({
+          id: img.id,
+          url: img.url,
+          filename: img.filename,
+          order: idx,
+          label: img.label,
+          roomType: img.roomType,
+          features: img.features,
+        }));
+        reorderImages(wizardImages);
+      },
+      [analyzedImages, reorderImages]
+    );
 
     /**
-     * Group sorted images by category.
+     * Handle reordering images.
      */
-    const imagesByCategory = React.useMemo(() => {
-      const grouped = new Map<ImageCategory, CategorizedImage[]>();
-      CATEGORY_ORDER.forEach((cat) => grouped.set(cat, []));
+    const handleReorder = React.useCallback(
+      (reordered: AnalyzedImage[]) => {
+        setAnalyzedImages(reordered);
 
-      sortedImages.forEach((img) => {
-        const arr = grouped.get(img.category) || [];
-        arr.push(img);
-        grouped.set(img.category, arr);
-      });
-
-      return grouped;
-    }, [sortedImages]);
+        const wizardImages: WizardImage[] = reordered.map((img, idx) => ({
+          id: img.id,
+          url: img.url,
+          filename: img.filename,
+          order: idx,
+          label: img.label,
+          roomType: img.roomType,
+          features: img.features,
+        }));
+        reorderImages(wizardImages);
+      },
+      [reorderImages]
+    );
 
     // Cleanup object URLs on unmount
     React.useEffect(() => {
@@ -436,57 +443,54 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
             Upload Property Photos
           </h2>
           <p className="mt-2 text-muted-foreground">
-            Add your photos and we&apos;ll automatically sort them into the
-            perfect sequence for your video tour.
+            Add your photos and AI will analyze each one, suggesting labels you can edit.
           </p>
         </div>
 
-        {/* Show dropzone if not sorted yet */}
-        {!hasBeenSorted && !isSorting && (
+        {/* Show dropzone if not analyzed yet */}
+        {!hasBeenAnalyzed && !isAnalyzing && (
           <>
             <Dropzone
               onFilesAdded={handleFilesAdded}
               accept="image/*"
               maxFiles={20}
               maxSize={10 * 1024 * 1024}
-              disabled={isSorting}
+              disabled={isAnalyzing}
             />
 
-            {/* Preview grid */}
             <ImagePreviewGrid
               images={localImages}
-              onRemove={handleRemoveImage}
+              onRemove={handleRemoveLocalImage}
               className="mt-4"
             />
 
-            {/* Sort button */}
             {localImages.length > 0 && (
               <div className="flex flex-col items-center gap-4">
                 <Button
-                  onClick={handleSortImages}
-                  disabled={isSorting || localImages.length === 0}
+                  onClick={handleAnalyzeImages}
+                  disabled={isAnalyzing || localImages.length === 0}
                   size="lg"
                   className="gap-2"
                 >
                   <Sparkles className="h-4 w-4" />
-                  Sort Images with AI
+                  Analyze with AI
                 </Button>
                 <p className="text-xs text-muted-foreground">
                   {localImages.length} image{localImages.length !== 1 ? "s" : ""}{" "}
-                  ready to sort
+                  ready to analyze
                 </p>
               </div>
             )}
           </>
         )}
 
-        {/* Sorting animation */}
+        {/* Analyzing animation */}
         <AnimatePresence>
-          {isSorting && <ScanningAnimation />}
+          {isAnalyzing && <ScanningAnimation />}
         </AnimatePresence>
 
-        {/* Sorted results */}
-        {hasBeenSorted && sortedImages.length > 0 && (
+        {/* Analyzed results with editable labels */}
+        {hasBeenAnalyzed && analyzedImages.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -496,15 +500,15 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
               <div className="flex items-center gap-2">
                 <Check className="h-5 w-5 text-green-500" />
                 <span className="font-medium text-foreground">
-                  {sortedImages.length} images sorted
+                  {analyzedImages.length} images analyzed
                 </span>
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setSortedImages([]);
-                  setHasBeenSorted(false);
+                  setAnalyzedImages([]);
+                  setHasBeenAnalyzed(false);
                   reorderImages([]);
                 }}
               >
@@ -513,30 +517,32 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
             </div>
 
             <p className="text-sm text-muted-foreground">
-              Hover over images to reassign categories. Click section headers to
-              expand/collapse.
+              Click labels to edit • Drag to reorder for video sequence • Labels will be used for narration
             </p>
 
-            {/* Category sections */}
-            <div className="flex flex-col gap-3">
-              {CATEGORY_ORDER.map((category) => (
-                <CategorySection
-                  key={category}
-                  category={category}
-                  images={imagesByCategory.get(category) || []}
-                  onMoveImage={handleMoveImage}
-                  isExpanded={expandedCategories.has(category)}
-                  onToggle={() => toggleCategory(category)}
+            {/* Reorderable image list */}
+            <Reorder.Group
+              axis="y"
+              values={analyzedImages}
+              onReorder={handleReorder}
+              className="flex flex-col gap-2"
+            >
+              {analyzedImages.map((image) => (
+                <ImageCard
+                  key={image.id}
+                  image={image}
+                  onLabelChange={handleLabelChange}
+                  onRemove={handleRemoveAnalyzedImage}
                 />
               ))}
-            </div>
+            </Reorder.Group>
           </motion.div>
         )}
 
         {/* Error display */}
-        {sortError && (
+        {analyzeError && (
           <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-center text-sm text-destructive">
-            {sortError}
+            {analyzeError}
           </div>
         )}
       </div>

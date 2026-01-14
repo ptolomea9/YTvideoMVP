@@ -40,6 +40,21 @@ export interface PropertyData {
 }
 
 /**
+ * Room type for video sequencing.
+ */
+export type RoomType =
+  | "exterior"
+  | "entry"
+  | "living"
+  | "kitchen"
+  | "dining"
+  | "master_bedroom"
+  | "bedroom"
+  | "bathroom"
+  | "outdoor"
+  | "other";
+
+/**
  * Image data after upload (Step 2 - UPLOAD).
  * Uses URL strings instead of File objects to keep state serializable.
  */
@@ -48,7 +63,9 @@ export interface WizardImage {
   url: string;
   filename: string;
   order: number;
-  caption?: string;
+  label: string;          // AI-suggested label (editable by user)
+  roomType: RoomType;     // Broad category for video sequencing
+  features: string[];     // Notable features for script generation
 }
 
 /**

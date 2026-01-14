@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { classifyImages } from "@/lib/openai";
+import { analyzeImages, type RoomType } from "@/lib/openai";
 
 /**
  * POST /api/images/sort
  *
- * Classifies images using GPT-4o Vision into room categories.
+ * Analyzes images using GPT-4o Vision to generate descriptive labels and features.
  * Expects JSON body with imageUrls array of {url, filename} objects.
- * Returns categorized images sorted for video sequence.
+ * Returns analyzed images sorted for video sequence with editable labels.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -40,10 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate that URLs belong to the authenticated user's uploads
-    // (URLs should contain the user ID in the path)
     const validUrls = imageUrls.filter((img) => {
-      // Supabase Storage URLs contain the user ID in the path
-      // e.g., .../listing-images/user-id/image.jpg
       return img.url.includes(user.id) || img.url.includes("listing-images");
     });
 
@@ -56,47 +53,50 @@ export async function POST(request: NextRequest) {
 
     // Check for OpenAI API key
     if (!process.env.OPENAI_API_KEY) {
-      console.warn("OPENAI_API_KEY not set, returning mock classification");
-      // Return mock classification for development/testing
-      const mockCategories = [
-        "exterior",
-        "entry",
-        "living",
-        "bedroom",
-        "bathroom",
-        "yard",
+      console.warn("OPENAI_API_KEY not set, returning mock analysis");
+      // Return mock analysis for development/testing
+      const mockLabels = [
+        { label: "Elegant Front Exterior", roomType: "exterior", features: ["Grand entrance", "Manicured lawn"] },
+        { label: "Welcoming Foyer", roomType: "entry", features: ["High ceilings", "Natural light"] },
+        { label: "Spacious Living Room", roomType: "living", features: ["Open concept", "Fireplace"] },
+        { label: "Gourmet Kitchen", roomType: "kitchen", features: ["Granite counters", "Stainless appliances"] },
+        { label: "Master Suite Retreat", roomType: "master_bedroom", features: ["En-suite bathroom", "Walk-in closet"] },
+        { label: "Private Backyard Oasis", roomType: "outdoor", features: ["Pool", "Covered patio"] },
       ];
-      const mockCategorized = validUrls.map((img, idx) => ({
+      const mockAnalyzed = validUrls.map((img, idx) => ({
         url: img.url,
         filename: img.filename,
-        category: mockCategories[idx % mockCategories.length],
+        ...mockLabels[idx % mockLabels.length],
       }));
-      return NextResponse.json({ categorized: mockCategorized });
+      return NextResponse.json({ analyzed: mockAnalyzed });
     }
 
-    // Classify images using GPT-4o Vision
-    const categorized = await classifyImages(validUrls);
+    // Analyze images using GPT-4o Vision
+    const analyzed = await analyzeImages(validUrls);
 
-    // Sort by category order for video sequence
-    const categoryOrder = [
+    // Sort by room type order for video sequence
+    const roomTypeOrder: RoomType[] = [
       "exterior",
       "entry",
       "living",
+      "kitchen",
+      "dining",
+      "master_bedroom",
       "bedroom",
       "bathroom",
-      "yard",
+      "outdoor",
       "other",
     ];
 
-    const sorted = [...categorized].sort((a, b) => {
-      return categoryOrder.indexOf(a.category) - categoryOrder.indexOf(b.category);
+    const sorted = [...analyzed].sort((a, b) => {
+      return roomTypeOrder.indexOf(a.roomType) - roomTypeOrder.indexOf(b.roomType);
     });
 
-    return NextResponse.json({ categorized: sorted });
+    return NextResponse.json({ analyzed: sorted });
   } catch (error) {
-    console.error("Image classification error:", error);
+    console.error("Image analysis error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Classification failed" },
+      { error: error instanceof Error ? error.message : "Analysis failed" },
       { status: 500 }
     );
   }

@@ -16,35 +16,41 @@ function getOpenAI(): OpenAI {
 }
 
 /**
- * Image category types from GPT-4o Vision classification.
+ * Room type for sequencing (broad categories for video order).
  */
-export type ImageCategory =
+export type RoomType =
   | "exterior"
   | "entry"
   | "living"
+  | "kitchen"
+  | "dining"
+  | "master_bedroom"
   | "bedroom"
   | "bathroom"
-  | "yard"
+  | "outdoor"
   | "other";
 
 /**
- * Result of classifying a single image.
+ * Result of analyzing a single image with descriptive label.
  */
-export interface ClassifiedImage {
+export interface AnalyzedImage {
   url: string;
-  category: ImageCategory;
   filename: string;
+  label: string;        // AI-generated descriptive label (editable by user)
+  roomType: RoomType;   // Broad category for video sequencing
+  features: string[];   // Notable features for script generation
 }
 
 /**
- * Classify real estate images into room categories using GPT-4o Vision.
+ * Analyze real estate images using GPT-4o Vision.
+ * Returns descriptive labels and features for each image.
  *
  * @param imageUrls - Array of publicly accessible image URLs
- * @returns Array of classified images with categories
+ * @returns Array of analyzed images with labels and features
  */
-export async function classifyImages(
+export async function analyzeImages(
   imageUrls: { url: string; filename: string }[]
-): Promise<ClassifiedImage[]> {
+): Promise<AnalyzedImage[]> {
   if (imageUrls.length === 0) {
     return [];
   }
@@ -53,29 +59,38 @@ export async function classifyImages(
   const imageContents: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
     {
       type: "text",
-      text: `You are analyzing real estate property photos. For each image, classify it into exactly ONE of these categories:
-- exterior: Front of house, street view, driveway, garage exterior
-- entry: Entryway, foyer, front door interior
-- living: Living room, family room, den, great room
-- bedroom: Any bedroom including master bedroom
-- bathroom: Any bathroom, powder room, en-suite
-- yard: Backyard, patio, pool, garden, outdoor living space
-- other: Kitchen, dining room, office, utility, or anything else
+      text: `You are a luxury real estate marketing expert analyzing property photos for a video tour.
+
+For each image, provide:
+1. A descriptive label (2-5 words) that captures what makes this space special
+   - Be specific: "Master Suite with Coffered Ceiling" not just "Bedroom"
+   - Highlight unique features: "Gourmet Kitchen with Marble Island", "Private Dock with Boat Lift"
+   - For bedrooms: distinguish "Master Bedroom/Suite" from "Guest Bedroom", "Kids Room", etc.
+
+2. A room type for video sequencing (one of: exterior, entry, living, kitchen, dining, master_bedroom, bedroom, bathroom, outdoor, other)
+
+3. Notable features that should be mentioned in narration (2-4 bullet points)
 
 Respond with a JSON array where each element has:
-- "index": the 0-based index of the image (in the order provided)
-- "category": one of the categories above
+- "index": the 0-based index of the image
+- "label": descriptive label for this space
+- "roomType": one of the room types listed above
+- "features": array of notable features as strings
 
 Example response:
-[{"index": 0, "category": "exterior"}, {"index": 1, "category": "living"}]
+[
+  {"index": 0, "label": "Mediterranean Villa Exterior", "roomType": "exterior", "features": ["Spanish tile roof", "Circular driveway", "Mature palm trees"]},
+  {"index": 1, "label": "Grand Foyer with Chandelier", "roomType": "entry", "features": ["Double-height ceiling", "Crystal chandelier", "Marble flooring"]},
+  {"index": 2, "label": "Master Suite with Ocean View", "roomType": "master_bedroom", "features": ["Floor-to-ceiling windows", "Private balcony", "Walk-in closet"]}
+]
 
-Now classify these ${imageUrls.length} images:`,
+Now analyze these ${imageUrls.length} property images:`,
     },
     ...imageUrls.map((img) => ({
       type: "image_url" as const,
       image_url: {
         url: img.url,
-        detail: "low" as const, // Low detail is sufficient for room classification
+        detail: "low" as const,
       },
     })),
   ];
@@ -89,8 +104,8 @@ Now classify these ${imageUrls.length} images:`,
           content: imageContents,
         },
       ],
-      max_tokens: 1000,
-      temperature: 0,
+      max_tokens: 2000,
+      temperature: 0.3, // Slight creativity for better labels
     });
 
     const content = response.choices[0]?.message?.content;
@@ -104,27 +119,33 @@ Now classify these ${imageUrls.length} images:`,
       jsonStr = jsonStr.replace(/```json?\n?/g, "").replace(/```$/g, "").trim();
     }
 
-    const classifications = JSON.parse(jsonStr) as {
+    const analyses = JSON.parse(jsonStr) as {
       index: number;
-      category: ImageCategory;
+      label: string;
+      roomType: RoomType;
+      features: string[];
     }[];
 
-    // Map classifications back to images
+    // Map analyses back to images
     return imageUrls.map((img, idx) => {
-      const classification = classifications.find((c) => c.index === idx);
+      const analysis = analyses.find((a) => a.index === idx);
       return {
         url: img.url,
-        category: classification?.category || "other",
         filename: img.filename,
+        label: analysis?.label || `Image ${idx + 1}`,
+        roomType: analysis?.roomType || "other",
+        features: analysis?.features || [],
       };
     });
   } catch (error) {
-    console.error("GPT-4o Vision classification error:", error);
-    // Fallback: return all as "other" if classification fails
-    return imageUrls.map((img) => ({
+    console.error("GPT-4o Vision analysis error:", error);
+    // Fallback: return basic labels if analysis fails
+    return imageUrls.map((img, idx) => ({
       url: img.url,
-      category: "other" as ImageCategory,
       filename: img.filename,
+      label: `Image ${idx + 1}`,
+      roomType: "other" as RoomType,
+      features: [],
     }));
   }
 }
