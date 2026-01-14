@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { UserNav } from "@/components/nav/user-nav";
+import { VideoStatusProvider } from "@/components/providers/VideoStatusProvider";
 
 /**
  * Protected layout - Shared layout for authenticated pages.
@@ -37,10 +38,12 @@ export default async function ProtectedLayout({
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="flex-1">
-        <div className="container py-8">{children}</div>
-      </main>
+      {/* Main content with video status notifications */}
+      <VideoStatusProvider userId={user.id}>
+        <main className="flex-1">
+          <div className="container py-8">{children}</div>
+        </main>
+      </VideoStatusProvider>
     </div>
   );
 }
