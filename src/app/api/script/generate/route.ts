@@ -212,16 +212,17 @@ Images: ${privateImages.length > 0 ? privateImages.map((img) => `"${img.label}" 
 Goal: Intimate, restful spaces. Highlight master suite and spa-like features.
 `);
 
-  // Outdoor section
+  // Outdoor section - emphasize POIs must be mentioned
   const outdoorImages = sectionGroups.get("outdoor") || [];
   const neighborhoodPOIs = property.features.length > 0
-    ? `Neighborhood POIs to mention: ${property.features.join(", ")}`
+    ? `
+**IMPORTANT - Neighborhood POIs (MUST mention):** ${property.features.join(", ")}
+These nearby amenities are key selling points. Weave them naturally into the narration, e.g., "Just steps from [POI]" or "Minutes from [POI] and [POI]".`
     : "";
   sectionDescriptions.push(`
 **OUTDOOR LIVING SECTION** (Backyard, Amenities, Neighborhood)
-Images: ${outdoorImages.length > 0 ? outdoorImages.map((img) => `"${img.label}" (${img.features.join(", ")})`).join("; ") : "None"}
-${neighborhoodPOIs}
-Goal: Outdoor lifestyle, entertaining potential, and neighborhood conveniences.
+Images: ${outdoorImages.length > 0 ? outdoorImages.map((img) => `"${img.label}" (${img.features.join(", ")})`).join("; ") : "None"}${neighborhoodPOIs}
+Goal: Outdoor lifestyle, entertaining potential, AND location advantages. Highlight both the property's outdoor spaces AND the neighborhood conveniences.
 `);
 
   // Closing section - include agent contact if available
