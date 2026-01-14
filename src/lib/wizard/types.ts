@@ -128,16 +128,19 @@ export interface ScriptSection {
 }
 
 /**
+ * Voice source types for tracking where the voice came from.
+ */
+export type VoiceSource = "my_voices" | "recorded" | "uploaded" | "library";
+
+/**
  * Style options for video generation (Step 4 - STYLE).
  */
 export interface StyleOptions {
   voiceId: string;
   voiceName: string;
-  musicTrack: string;
-  transitionStyle: "fade" | "slide" | "zoom" | "none";
-  colorGrading: "warm" | "cool" | "neutral" | "cinematic";
-  textOverlay: boolean;
-  watermark: boolean;
+  voiceSource: VoiceSource;
+  musicEnabled: boolean;
+  mlsDualOutput: boolean;
 }
 
 /**
@@ -186,10 +189,8 @@ export const initialWizardState: WizardState = {
   images: [],
   scriptSections: [],
   styleOptions: {
-    transitionStyle: "fade",
-    colorGrading: "cinematic",
-    textOverlay: true,
-    watermark: false,
+    musicEnabled: true,
+    mlsDualOutput: true,
   },
   isSubmitting: false,
   error: null,
