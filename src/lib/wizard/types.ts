@@ -133,6 +133,16 @@ export interface ScriptSection {
 export type VoiceSource = "my_voices" | "recorded" | "uploaded" | "library";
 
 /**
+ * Music selection for background music.
+ */
+export interface MusicSelection {
+  type: "library" | "upload" | "none";
+  trackId?: string;
+  trackUrl?: string;
+  trackName?: string;
+}
+
+/**
  * Style options for video generation (Step 4 - STYLE).
  */
 export interface StyleOptions {
@@ -140,6 +150,7 @@ export interface StyleOptions {
   voiceName: string;
   voiceSource: VoiceSource;
   musicEnabled: boolean;
+  musicSelection: MusicSelection;
   mlsDualOutput: boolean;
 }
 
@@ -190,6 +201,7 @@ export const initialWizardState: WizardState = {
   scriptSections: [],
   styleOptions: {
     musicEnabled: true,
+    musicSelection: { type: "none" },
     mlsDualOutput: true,
   },
   isSubmitting: false,

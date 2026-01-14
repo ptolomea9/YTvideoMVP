@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
@@ -13,8 +14,8 @@ export default function Home() {
         <p className="text-lg text-muted-foreground">
           Coming soon
         </p>
-        <Button variant="default" size="lg">
-          Get Started
+        <Button variant="default" size="lg" asChild>
+          <Link href="/signup">Get Started</Link>
         </Button>
       </main>
     </div>

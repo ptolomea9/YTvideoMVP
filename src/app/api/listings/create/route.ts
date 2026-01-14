@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { PropertyData, WizardImage, ScriptSection, StyleOptions } from "@/lib/wizard/types";
-import { transformWizardToN8n, buildWebhookUrl } from "@/lib/n8n";
+import { transformWizardToN8n, buildWebhookUrl, triggerYoutubeVideo, type MusicTrackMeta } from "@/lib/n8n";
 
 /**
  * POST /api/listings/create
@@ -106,15 +106,38 @@ export async function POST(request: Request) {
       );
     }
 
-    // Transform wizard data to n8n payload format
+    // Fetch music track metadata if a track is selected
+    let musicTrack: MusicTrackMeta | undefined;
+    if (styleOptions.musicEnabled && styleOptions.musicSelection?.trackId) {
+      const { data: track, error: trackError } = await supabase
+        .from("music_tracks")
+        .select("*")
+        .eq("id", styleOptions.musicSelection.trackId)
+        .eq("is_active", true)
+        .single();
+
+      if (!trackError && track) {
+        musicTrack = {
+          url: track.file_url,
+          duration: track.duration,
+          bpm: track.bpm,
+          beats: track.beats || [],
+          snareHits: track.snare_hits || [],
+          bassHits: track.bass_hits || [],
+        };
+      }
+    }
+
+    // Transform wizard data to n8n payload format (now with beat data)
     const n8nPayload = transformWizardToN8n(
       propertyData,
       images,
       scriptSections,
       styleOptions,
-      user.email || ""
+      user.email || "",
+      musicTrack
     );
-    const webhookUrl = buildWebhookUrl("tourVideo");
+    const webhookUrl = buildWebhookUrl("youtubeVideo");
 
     // Create video record with n8n payload for debugging
     const { data: video, error: videoError } = await supabase
@@ -150,12 +173,33 @@ export async function POST(request: Request) {
       );
     }
 
+    // Trigger n8n Youtube Video workflow
+    const webhookResponse = await triggerYoutubeVideo(n8nPayload, {
+      isTest: process.env.NODE_ENV !== "production",
+    });
+
+    if (webhookResponse.success) {
+      // Update video status to processing
+      await supabase
+        .from("videos")
+        .update({
+          status: "processing",
+          n8n_execution_id: webhookResponse.executionId,
+        })
+        .eq("id", video.id);
+    } else {
+      // Log the error but don't fail - video record exists for retry
+      console.error("n8n webhook trigger failed:", webhookResponse.error);
+    }
+
     return NextResponse.json({
       success: true,
       listingId: listing.id,
       videoId: video.id,
       n8nWebhookUrl: webhookUrl,
-      // Note: n8n webhook trigger will be added in 03-02
+      n8nTriggered: webhookResponse.success,
+      n8nExecutionId: webhookResponse.executionId,
+      n8nError: webhookResponse.error,
     });
   } catch (error) {
     console.error("Submission error:", error);

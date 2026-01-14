@@ -22,7 +22,7 @@ export const N8N_WORKFLOWS = {
     name: "Video Listing Main Workflow",
   },
   youtubeVideo: {
-    id: "hjG60LIO86i5vxX3",
+    id: "Qo2sirL0cDI2fVNQMJ5Eq",
     webhookPath: "f8982d9e-51cb-462b-a319-8d6e98a92f6d",
     name: "Youtube Video",
   },
@@ -106,6 +106,57 @@ export async function triggerTourVideo(
 
     // n8n typically returns the execution ID in the response
     // The exact format depends on the workflow's response configuration
+    const data = await response.json().catch(() => ({}));
+
+    return {
+      success: true,
+      webhookUrl,
+      executionId: data.executionId || data.id || undefined,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      webhookUrl,
+      error: error instanceof Error ? error.message : "Unknown error triggering n8n webhook",
+    };
+  }
+}
+
+/**
+ * Trigger the Youtube Video workflow.
+ * This workflow generates longer-form YouTube content with AI script generation.
+ *
+ * @param payload - Transformed wizard data
+ * @param options - Optional configuration
+ * @returns Webhook response with execution ID
+ */
+export async function triggerYoutubeVideo(
+  payload: N8nTourVideoPayload,
+  options?: { isTest?: boolean }
+): Promise<N8nWebhookResponse> {
+  const webhookUrl = buildWebhookUrl("youtubeVideo", options?.isTest);
+
+  // Youtube Video workflow expects payload wrapped in array
+  const wrappedPayload = [payload];
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(wrappedPayload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return {
+        success: false,
+        webhookUrl,
+        error: `n8n webhook failed: ${response.status} - ${errorText}`,
+      };
+    }
+
     const data = await response.json().catch(() => ({}));
 
     return {

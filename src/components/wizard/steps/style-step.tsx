@@ -10,6 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AudioRecorder } from "@/components/ui/audio-recorder";
 import { Badge } from "@/components/ui/badge";
+import { MusicSelector } from "@/components/wizard/music-selector";
+import { cn } from "@/lib/utils";
+import type { MusicSelection } from "@/lib/music";
 import {
   Mic,
   Upload,
@@ -20,9 +23,12 @@ import {
   Loader2,
   Volume2,
   Music,
-  FileVideo,
   Check,
   AlertCircle,
+  Star,
+  Clock,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 interface VoiceData {
@@ -52,9 +58,21 @@ export interface StyleStepHandle {
     voiceName: string;
     voiceSource: VoiceSource;
     musicEnabled: boolean;
+    musicSelection: MusicSelection;
     mlsDualOutput: boolean;
   };
 }
+
+// Group voices by use case for better organization
+const USE_CASE_LABELS: Record<string, string> = {
+  narration: "Narration",
+  conversational: "Conversational",
+  news: "News",
+  characters: "Characters",
+  meditation: "Meditation",
+  audiobook: "Audiobook",
+  other: "Other",
+};
 
 export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
   // Voice selection state
@@ -77,6 +95,9 @@ export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
     search: "",
   });
 
+  // Expanded use-case groups in library view
+  const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(new Set(["narration"]));
+
   // Record/Upload tab state
   const [voiceName, setVoiceName] = React.useState("");
   const [recordedBlob, setRecordedBlob] = React.useState<Blob | null>(null);
@@ -90,7 +111,47 @@ export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
 
   // Toggle states
   const [musicEnabled, setMusicEnabled] = React.useState(true);
+  const [musicSelection, setMusicSelection] = React.useState<MusicSelection>({ type: "none" });
   const [mlsDualOutput, setMlsDualOutput] = React.useState(true);
+
+  // Favorites (stored in localStorage)
+  const [favorites, setFavorites] = React.useState<Set<string>>(new Set());
+  const [recentlyUsed, setRecentlyUsed] = React.useState<string[]>([]);
+
+  // Load favorites from localStorage
+  React.useEffect(() => {
+    const stored = localStorage.getItem("voice-favorites");
+    if (stored) {
+      setFavorites(new Set(JSON.parse(stored)));
+    }
+    const recent = localStorage.getItem("voice-recently-used");
+    if (recent) {
+      setRecentlyUsed(JSON.parse(recent));
+    }
+  }, []);
+
+  // Save favorites to localStorage
+  const toggleFavorite = (voiceId: string) => {
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (next.has(voiceId)) {
+        next.delete(voiceId);
+      } else {
+        next.add(voiceId);
+      }
+      localStorage.setItem("voice-favorites", JSON.stringify([...next]));
+      return next;
+    });
+  };
+
+  // Track recently used
+  const addToRecentlyUsed = (voiceId: string) => {
+    setRecentlyUsed((prev) => {
+      const next = [voiceId, ...prev.filter((id) => id !== voiceId)].slice(0, 5);
+      localStorage.setItem("voice-recently-used", JSON.stringify(next));
+      return next;
+    });
+  };
 
   // Expose validation and data getter via ref
   React.useImperativeHandle(ref, () => ({
@@ -102,6 +163,7 @@ export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
       voiceName: selectedVoice?.name || "",
       voiceSource: selectedVoice?.source || "library",
       musicEnabled,
+      musicSelection: musicEnabled ? musicSelection : { type: "none" },
       mlsDualOutput,
     }),
   }));
@@ -132,7 +194,7 @@ export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
       if (libraryFilters.age && libraryFilters.age !== "all") params.set("age", libraryFilters.age);
       if (libraryFilters.accent && libraryFilters.accent !== "all") params.set("accent", libraryFilters.accent);
       if (libraryFilters.search) params.set("search", libraryFilters.search);
-      params.set("page_size", "20");
+      params.set("page_size", "50");
 
       const response = await fetch(`/api/voices/library?${params.toString()}`);
       if (!response.ok) throw new Error("Failed to fetch library");
@@ -188,6 +250,7 @@ export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
         name: voiceName,
         source,
       });
+      addToRecentlyUsed(data.voice_id);
 
       // Reset form
       setVoiceName("");
@@ -248,76 +311,191 @@ export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
       source,
       previewUrl: voice.previewUrl,
     });
+    addToRecentlyUsed(voice.id);
   };
 
-  // Voice card component
-  const VoiceCard = ({
+  // Toggle group expansion
+  const toggleGroup = (groupKey: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+      return next;
+    });
+  };
+
+  // Group voices by use case
+  const groupVoicesByUseCase = (voices: VoiceData[]) => {
+    const groups: Record<string, VoiceData[]> = {};
+
+    // Add favorites group if any
+    const favoriteVoices = voices.filter((v) => favorites.has(v.id));
+    if (favoriteVoices.length > 0) {
+      groups["favorites"] = favoriteVoices;
+    }
+
+    // Add recently used if any
+    const recentVoices = voices.filter((v) => recentlyUsed.includes(v.id));
+    if (recentVoices.length > 0) {
+      groups["recent"] = recentVoices;
+    }
+
+    // Group remaining by use case
+    voices.forEach((voice) => {
+      const useCase = voice.useCase?.toLowerCase() || "other";
+      const key = Object.keys(USE_CASE_LABELS).includes(useCase) ? useCase : "other";
+      if (!groups[key]) groups[key] = [];
+      // Avoid duplicates if already in favorites/recent
+      if (!favorites.has(voice.id) && !recentlyUsed.includes(voice.id)) {
+        groups[key].push(voice);
+      } else if (!groups["favorites"]?.includes(voice) && !groups["recent"]?.includes(voice)) {
+        groups[key].push(voice);
+      }
+    });
+
+    return groups;
+  };
+
+  // Compact voice row component
+  const VoiceRow = ({
     voice,
     source,
     isSelected,
+    showFavorite = true,
   }: {
     voice: VoiceData;
     source: VoiceSource;
     isSelected: boolean;
+    showFavorite?: boolean;
   }) => (
     <div
-      className={`
-        relative flex flex-col gap-2 rounded-lg border p-3 transition-all cursor-pointer
-        ${isSelected ? "border-primary ring-2 ring-primary/20 bg-primary/5" : "border-border hover:border-primary/50"}
-      `}
+      className={cn(
+        "flex items-center gap-3 px-3 py-2 rounded-md transition-colors cursor-pointer",
+        isSelected
+          ? "bg-primary/10 border border-primary/30"
+          : "hover:bg-muted/50"
+      )}
       onClick={() => selectVoice(voice, source)}
     >
-      {isSelected && (
-        <div className="absolute -top-2 -right-2 rounded-full bg-primary p-1">
-          <Check className="h-3 w-3 text-primary-foreground" />
-        </div>
+      {/* Play button */}
+      {voice.previewUrl && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            togglePreview(voice);
+          }}
+        >
+          {playingVoiceId === voice.id ? (
+            <Pause className="h-3.5 w-3.5" />
+          ) : (
+            <Play className="h-3.5 w-3.5" />
+          )}
+        </Button>
       )}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <p className="font-medium text-sm truncate">{voice.name}</p>
-          {voice.description && (
-            <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-              {voice.description}
-            </p>
+
+      {/* Voice info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium truncate">{voice.name}</span>
+          {voice.gender && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+              {voice.gender}
+            </Badge>
+          )}
+          {voice.accent && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+              {voice.accent}
+            </Badge>
           )}
         </div>
-        {voice.previewUrl && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 shrink-0"
-            onClick={(e) => {
-              e.stopPropagation();
-              togglePreview(voice);
-            }}
-          >
-            {playingVoiceId === voice.id ? (
-              <Pause className="h-4 w-4" />
-            ) : (
-              <Play className="h-4 w-4" />
+        {voice.description && (
+          <p className="text-xs text-muted-foreground truncate">{voice.description}</p>
+        )}
+      </div>
+
+      {/* Favorite button */}
+      {showFavorite && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleFavorite(voice.id);
+          }}
+        >
+          <Star
+            className={cn(
+              "h-3.5 w-3.5",
+              favorites.has(voice.id) ? "fill-amber-400 text-amber-400" : "text-muted-foreground"
             )}
-          </Button>
-        )}
-      </div>
-      <div className="flex flex-wrap gap-1">
-        {voice.gender && (
-          <Badge variant="secondary" className="text-xs">
-            {voice.gender}
-          </Badge>
-        )}
-        {voice.accent && (
-          <Badge variant="secondary" className="text-xs">
-            {voice.accent}
-          </Badge>
-        )}
-        {voice.useCase && (
-          <Badge variant="outline" className="text-xs">
-            {voice.useCase}
-          </Badge>
-        )}
-      </div>
+          />
+        </Button>
+      )}
+
+      {/* Selected indicator */}
+      {isSelected && <Check className="h-4 w-4 text-primary shrink-0" />}
     </div>
   );
+
+  // Voice group component
+  const VoiceGroup = ({
+    groupKey,
+    label,
+    icon,
+    voices,
+    source,
+  }: {
+    groupKey: string;
+    label: string;
+    icon: React.ReactNode;
+    voices: VoiceData[];
+    source: VoiceSource;
+  }) => {
+    const isExpanded = expandedGroups.has(groupKey);
+
+    if (voices.length === 0) return null;
+
+    return (
+      <div className="border-b last:border-b-0">
+        <button
+          className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors"
+          onClick={() => toggleGroup(groupKey)}
+        >
+          {isExpanded ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          )}
+          {icon}
+          <span>{label}</span>
+          <Badge variant="secondary" className="ml-auto text-xs">
+            {voices.length}
+          </Badge>
+        </button>
+        {isExpanded && (
+          <div className="pb-2">
+            {voices.map((voice) => (
+              <VoiceRow
+                key={voice.id}
+                voice={voice}
+                source={source}
+                isSelected={selectedVoice?.id === voice.id}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const voiceGroups = groupVoicesByUseCase(libraryVoices);
 
   return (
     <div className="space-y-6">
@@ -332,7 +510,7 @@ export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
             Voice Selection
           </CardTitle>
           <CardDescription>
-            Choose a voice for your video narration. Use an existing voice, record your own, or browse the library.
+            Choose a voice for your video narration
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -380,9 +558,9 @@ export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="rounded-lg border max-h-[300px] overflow-y-auto">
                   {myVoices.map((voice) => (
-                    <VoiceCard
+                    <VoiceRow
                       key={voice.id}
                       voice={voice}
                       source="my_voices"
@@ -581,7 +759,7 @@ export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
                   Apply Filters
                 </Button>
 
-                {/* Voice Grid */}
+                {/* Voice List with Groups */}
                 {loadingLibrary ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -599,15 +777,44 @@ export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
                     </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {libraryVoices.map((voice) => (
-                      <VoiceCard
-                        key={voice.id}
-                        voice={voice}
+                  <div className="rounded-lg border max-h-[400px] overflow-y-auto">
+                    {/* Favorites group */}
+                    {voiceGroups["favorites"] && (
+                      <VoiceGroup
+                        groupKey="favorites"
+                        label="Favorites"
+                        icon={<Star className="h-4 w-4 text-amber-400 fill-amber-400" />}
+                        voices={voiceGroups["favorites"]}
                         source="library"
-                        isSelected={selectedVoice?.id === voice.id}
                       />
-                    ))}
+                    )}
+
+                    {/* Recently used group */}
+                    {voiceGroups["recent"] && (
+                      <VoiceGroup
+                        groupKey="recent"
+                        label="Recently Used"
+                        icon={<Clock className="h-4 w-4 text-muted-foreground" />}
+                        voices={voiceGroups["recent"]}
+                        source="library"
+                      />
+                    )}
+
+                    {/* Use case groups */}
+                    {Object.entries(USE_CASE_LABELS).map(([key, label]) => {
+                      const voices = voiceGroups[key];
+                      if (!voices || voices.length === 0) return null;
+                      return (
+                        <VoiceGroup
+                          key={key}
+                          groupKey={key}
+                          label={label}
+                          icon={<Volume2 className="h-4 w-4 text-muted-foreground" />}
+                          voices={voices}
+                          source="library"
+                        />
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -667,21 +874,33 @@ export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Music Toggle */}
-          <div className="flex items-center justify-between rounded-lg border p-4">
-            <div className="space-y-0.5">
-              <Label htmlFor="music-toggle" className="text-base font-medium">
-                Background Music
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Add cinematic background music to your video
-              </p>
+          {/* Music Toggle with Selector */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <Label htmlFor="music-toggle" className="text-base font-medium">
+                  Background Music
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Add cinematic background music to your video
+                </p>
+              </div>
+              <Switch
+                id="music-toggle"
+                checked={musicEnabled}
+                onCheckedChange={setMusicEnabled}
+              />
             </div>
-            <Switch
-              id="music-toggle"
-              checked={musicEnabled}
-              onCheckedChange={setMusicEnabled}
-            />
+
+            {/* Music Selector - only shown when music is enabled */}
+            {musicEnabled && (
+              <div className="rounded-lg border p-4">
+                <MusicSelector
+                  value={musicSelection}
+                  onChange={setMusicSelection}
+                />
+              </div>
+            )}
           </div>
 
           {/* MLS Toggle */}

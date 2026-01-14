@@ -82,7 +82,10 @@ export interface PropertyDataStepHandle {
 export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
   function PropertyDataStep(_props, ref) {
     const { state, setPropertyData } = useWizard();
-    const [pois, setPois] = useState<string[]>(state.propertyData.features || []);
+    // TODO: Remove test defaults before production
+    const [pois, setPois] = useState<string[]>(
+      state.propertyData.features?.length ? state.propertyData.features : ["Rodeo Drive", "Beverly Hills Hotel", "Greystone Mansion"]
+    );
     const [poiInput, setPoiInput] = useState("");
 
     const {
@@ -95,21 +98,22 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
     } = useForm<PropertyFormData>({
       resolver: zodResolver(propertyDataSchema),
       mode: "onChange",
+      // TODO: Remove test defaults before production
       defaultValues: {
-        address: state.propertyData.address || "",
-        city: state.propertyData.city || "",
-        state: state.propertyData.state || "",
-        zipCode: state.propertyData.zipCode || "",
-        propertyType: state.propertyData.propertyType || "",
-        bedrooms: state.propertyData.bedrooms || 0,
-        bathrooms: state.propertyData.bathrooms || 0,
-        squareFeet: state.propertyData.squareFeet || 0,
-        lotSize: state.propertyData.lotSize || undefined,
-        lotSizeUnit: state.propertyData.lotSizeUnit || "sqft",
-        listingPrice: state.propertyData.listingPrice || 0,
-        description: state.propertyData.description || "",
-        agentPhone: state.propertyData.agentPhone || "",
-        agentSocial: state.propertyData.agentSocial || "",
+        address: state.propertyData.address || "123 Luxury Lane",
+        city: state.propertyData.city || "Beverly Hills",
+        state: state.propertyData.state || "CA",
+        zipCode: state.propertyData.zipCode || "90210",
+        propertyType: state.propertyData.propertyType || "single_family",
+        bedrooms: state.propertyData.bedrooms || 4,
+        bathrooms: state.propertyData.bathrooms || 3,
+        squareFeet: state.propertyData.squareFeet || 3500,
+        lotSize: state.propertyData.lotSize || 0.5,
+        lotSizeUnit: state.propertyData.lotSizeUnit || "acres",
+        listingPrice: state.propertyData.listingPrice || 2500000,
+        description: state.propertyData.description || "Stunning modern estate with panoramic city views, chef's kitchen, and resort-style pool.",
+        agentPhone: state.propertyData.agentPhone || "(310) 555-0123",
+        agentSocial: state.propertyData.agentSocial || "@luxuryhomes",
       },
     });
 

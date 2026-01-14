@@ -18,6 +18,7 @@ import { ImageCompareSlider } from "@/components/ui/image-compare-slider";
 import { cn } from "@/lib/utils";
 import { useWizard } from "@/lib/wizard/wizard-context";
 import type { WizardImage, RoomType, EnhancementPreset, EnhancementStatus, EnhancedUrlCache } from "@/lib/wizard/types";
+import { AlertTriangle } from "lucide-react";
 
 /**
  * Room type labels for display.
@@ -34,6 +35,96 @@ const ROOM_TYPE_LABELS: Record<RoomType, string> = {
   outdoor: "Outdoor",
   other: "Other",
 };
+
+/**
+ * Script section requirements - maps section to required room types.
+ * Each section needs at least one image from its room types.
+ */
+interface SectionRequirement {
+  section: string;
+  label: string;
+  roomTypes: RoomType[];
+  description: string;
+}
+
+const SECTION_REQUIREMENTS: SectionRequirement[] = [
+  {
+    section: "opening",
+    label: "Opening",
+    roomTypes: ["exterior"],
+    description: "Exterior/curb appeal shot",
+  },
+  {
+    section: "living",
+    label: "Living Areas",
+    roomTypes: ["entry", "living", "kitchen", "dining"],
+    description: "Entry, living room, kitchen, or dining area",
+  },
+  {
+    section: "private",
+    label: "Private Spaces",
+    roomTypes: ["master_bedroom", "bedroom", "bathroom"],
+    description: "Bedroom or bathroom",
+  },
+  {
+    section: "outdoor",
+    label: "Outdoor",
+    roomTypes: ["outdoor"],
+    description: "Backyard, patio, or outdoor amenities",
+  },
+];
+
+/**
+ * Check which sections are missing required images.
+ */
+function getMissingSections(images: { roomType: RoomType }[]): SectionRequirement[] {
+  const roomTypes = new Set(images.map((img) => img.roomType));
+
+  return SECTION_REQUIREMENTS.filter((req) => {
+    // Check if any of the required room types are present
+    return !req.roomTypes.some((rt) => roomTypes.has(rt));
+  });
+}
+
+/**
+ * MissingImagesWarning - Shows which image categories are missing.
+ */
+function MissingImagesWarning({ missingSections }: { missingSections: SectionRequirement[] }) {
+  if (missingSections.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4"
+    >
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+        <div className="flex-1">
+          <h4 className="font-medium text-amber-700 dark:text-amber-400">
+            Missing Required Photos
+          </h4>
+          <p className="mt-1 text-sm text-amber-600 dark:text-amber-300/80">
+            To generate a complete video script, please add at least one photo for each section:
+          </p>
+          <ul className="mt-2 space-y-1">
+            {missingSections.map((section) => (
+              <li key={section.section} className="flex items-center gap-2 text-sm">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                <span className="font-medium text-amber-700 dark:text-amber-400">
+                  {section.label}:
+                </span>
+                <span className="text-amber-600 dark:text-amber-300/80">
+                  {section.description}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
 
 /**
  * Analyzed image from API response.
@@ -726,6 +817,12 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
       }
     }, [state.images, analyzedImages.length]);
 
+    // Compute missing sections
+    const missingSections = React.useMemo(
+      () => getMissingSections(analyzedImages),
+      [analyzedImages]
+    );
+
     // Expose validate method to parent
     React.useImperativeHandle(ref, () => ({
       validate: async () => {
@@ -733,6 +830,17 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           setAnalyzeError("Please upload and analyze images before continuing.");
           return false;
         }
+
+        // Check for missing sections
+        const missing = getMissingSections(analyzedImages);
+        if (missing.length > 0) {
+          const missingLabels = missing.map((s) => s.label).join(", ");
+          setAnalyzeError(
+            `Missing photos for: ${missingLabels}. Add at least one photo for each section to continue.`
+          );
+          return false;
+        }
+
         return true;
       },
     }));
@@ -1191,9 +1299,140 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
               </Button>
             </div>
 
+            {/* Missing sections warning */}
+            <MissingImagesWarning missingSections={missingSections} />
+
             <p className="text-sm text-muted-foreground">
               Click to edit labels &amp; descriptions • Drag to reorder • Used for video narration
             </p>
+
+            {/* Add more images option when missing sections */}
+            {missingSections.length > 0 && (
+              <div className="rounded-lg border-2 border-dashed border-border p-4">
+                <Dropzone
+                  onFilesAdded={(files) => {
+                    // Add to local images and re-analyze
+                    const newImages: ImagePreview[] = files.map((file) => ({
+                      id: nanoid(),
+                      file,
+                      preview: URL.createObjectURL(file),
+                    }));
+                    setLocalImages(newImages);
+                    // Keep analyzed images and show analyze button
+                  }}
+                  accept="image/*"
+                  maxFiles={10}
+                  maxSize={10 * 1024 * 1024}
+                  className="border-0 p-2"
+                />
+                {localImages.length > 0 && (
+                  <div className="mt-3 flex flex-col items-center gap-2">
+                    <ImagePreviewGrid
+                      images={localImages}
+                      onRemove={handleRemoveLocalImage}
+                    />
+                    <Button
+                      onClick={async () => {
+                        // Analyze just the new images and merge
+                        setIsAnalyzing(true);
+                        setAnalyzeError(null);
+
+                        try {
+                          const formData = new FormData();
+                          localImages.forEach((img) => {
+                            formData.append("images", img.file);
+                          });
+
+                          const uploadResponse = await fetch("/api/images/upload", {
+                            method: "POST",
+                            body: formData,
+                          });
+
+                          if (!uploadResponse.ok) {
+                            const error = await uploadResponse.json();
+                            throw new Error(error.error || "Failed to upload images");
+                          }
+
+                          const { urls } = await uploadResponse.json();
+
+                          const analyzeResponse = await fetch("/api/images/sort", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ imageUrls: urls }),
+                          });
+
+                          if (!analyzeResponse.ok) {
+                            const error = await analyzeResponse.json();
+                            throw new Error(error.error || "Failed to analyze images");
+                          }
+
+                          const { analyzed } = await analyzeResponse.json();
+
+                          // Merge with existing analyzed images
+                          const newAnalyzedImages: AnalyzedImage[] = analyzed.map(
+                            (item: { url: string; filename: string; label: string; roomType: RoomType; features: string[] }, idx: number) => ({
+                              id: nanoid(),
+                              url: item.url,
+                              filename: item.filename || `image-${analyzedImages.length + idx + 1}`,
+                              label: item.label,
+                              roomType: item.roomType,
+                              features: item.features || [],
+                              enhancement: "original" as EnhancementPreset,
+                              enhancementStatus: "idle" as EnhancementStatus,
+                              enhancedUrls: {},
+                            })
+                          );
+
+                          const mergedImages = [...analyzedImages, ...newAnalyzedImages];
+                          setAnalyzedImages(mergedImages);
+
+                          // Update wizard state
+                          const wizardImages: WizardImage[] = mergedImages.map((img, idx) => ({
+                            id: img.id,
+                            url: img.url,
+                            filename: img.filename,
+                            order: idx,
+                            label: img.label,
+                            roomType: img.roomType,
+                            features: img.features,
+                            enhancement: "original",
+                            enhancementStatus: "idle",
+                            enhancedUrls: {},
+                          }));
+                          addImages(wizardImages);
+
+                          // Clear local images
+                          localImages.forEach((img) => URL.revokeObjectURL(img.preview));
+                          setLocalImages([]);
+                        } catch (error) {
+                          console.error("Analysis error:", error);
+                          setAnalyzeError(
+                            error instanceof Error ? error.message : "Failed to analyze images"
+                          );
+                        } finally {
+                          setIsAnalyzing(false);
+                        }
+                      }}
+                      disabled={isAnalyzing}
+                      size="sm"
+                      className="gap-2"
+                    >
+                      {isAnalyzing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Analyzing...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4" />
+                          Add {localImages.length} More Photo{localImages.length !== 1 ? "s" : ""}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Reorderable image list */}
             <Reorder.Group

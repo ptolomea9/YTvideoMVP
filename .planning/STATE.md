@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-13)
 ## Current Position
 
 Phase: 3 of 6 (n8n Integration)
-Plan: 1 of 7 in current phase (03-01 complete)
-Status: Ready for 03-02
-Last activity: 2026-01-13 — Completed 03-01 (Debug existing n8n workflow)
+Plan: 3 of 7 in current phase (03-03 complete)
+Status: Ready for 03-04
+Last activity: 2026-01-13 — Completed 03-03 (Kie.ai image resize - verified existing workflow)
 
-Progress: ███████████████████████░░░░░░░ 50%
+Progress: ██████████████████████████░░░░ 58%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10
-- Average duration: 13 min
-- Total execution time: 2.2 hours
+- Total plans completed: 12
+- Average duration: 12 min
+- Total execution time: 2.4 hours
 
 **By Phase:**
 
@@ -29,11 +29,11 @@ Progress: ███████████████████████�
 |-------|-------|-------|----------|
 | 1. Foundation | 3/3 ✓ | 18 min | 6 min |
 | 2. Create Wizard | 6/6 ✓ | 102 min | 17 min |
-| 3. n8n Integration | 1/7 | 12 min | 12 min |
+| 3. n8n Integration | 3/7 | 24 min | 8 min |
 
 **Recent Trend:**
-- Last 5 plans: 12m, 8m, 12m, 24m, 12m
-- Trend: Stable
+- Last 5 plans: 8m, 12m, 24m, 12m, 5m
+- Trend: Fast (verification-only plans)
 
 ## Accumulated Context
 
@@ -69,6 +69,11 @@ Recent decisions affecting current work:
 - Selected Tour Video workflow for MVP (simpler than main workflow, no HeyGen avatar)
 - n8n payload stored in videos table for debugging webhook triggers
 - Default music URL provided even when music disabled (workflow handles muting)
+- Bass/snare beat separation via Python/librosa for accurate video transitions
+- Snare hits preferred for image transitions (punchy feel), bass hits available for future use
+- Beat data stored in music_tracks table: bass_hits[], snare_hits[], beats[], bpm
+- **Youtube Video workflow** (hjG60LIO86i5vxX3) is target, Tour Video/Listing Video were references
+- Youtube Video expects array-wrapped payload: `[payload]` → `body[0]`
 
 ### Deferred Issues
 
@@ -81,6 +86,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-13
-Stopped at: Completed 03-01-PLAN.md (Debug existing n8n workflow)
-Next up: 03-02 - Webhook trigger from Next.js
+Stopped at: Completed 03-03 (Kie.ai image resize verification)
+Next up: 03-04 - Kling 2.6 cinematic motion generation
 Resume file: None

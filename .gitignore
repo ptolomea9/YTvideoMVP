@@ -40,3 +40,24 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude temp files
+tmpclaude-*
+nul
+
+# Reference workflow JSONs (keep in project root, not tracked)
+/Tour Video.json
+/Video Listing Main WorkFlow.json
+/Youtube Video.json
+
+# Large binary files
+/Music/
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.mp3
+*.wav
+
+# Build tools
+aubio-*/

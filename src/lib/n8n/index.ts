@@ -10,6 +10,7 @@ export {
   validateN8nPayload,
   type N8nTourVideoPayload,
   type N8nListingVideoPayload,
+  type MusicTrackMeta,
 } from "./transform";
 
 // Default music library
@@ -27,6 +28,7 @@ export {
   N8N_WORKFLOWS,
   buildWebhookUrl,
   triggerTourVideo,
+  triggerYoutubeVideo,
   checkN8nHealth,
   type WorkflowType,
   type N8nWebhookResponse,
