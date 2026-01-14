@@ -3,12 +3,13 @@
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import { useRef, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Play } from 'lucide-react';
 import { VideoWithListing, VIDEO_STATUS_CONFIG } from '@/types/video';
 import { cn } from '@/lib/utils';
 
 interface VideoCardProps {
   video: VideoWithListing;
+  onSelect?: () => void;
 }
 
 /**
@@ -17,7 +18,7 @@ interface VideoCardProps {
  * Hover state includes subtle scale and border highlight.
  * Completed videos autoplay on hover.
  */
-export function VideoCard({ video }: VideoCardProps) {
+export function VideoCard({ video, onSelect }: VideoCardProps) {
   const statusConfig = VIDEO_STATUS_CONFIG[video.status];
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isHovering, setIsHovering] = useState(false);
@@ -30,6 +31,13 @@ export function VideoCard({ video }: VideoCardProps) {
 
   // Check if video is completed and has a video URL
   const canPlayVideo = video.status === 'completed' && video.branded_url;
+  const isClickable = canPlayVideo && onSelect;
+
+  const handleClick = () => {
+    if (isClickable) {
+      onSelect();
+    }
+  };
 
   const handleMouseEnter = () => {
     setIsHovering(true);
@@ -53,11 +61,23 @@ export function VideoCard({ video }: VideoCardProps) {
 
   return (
     <motion.div
-      className="group relative overflow-hidden rounded-xl border border-border bg-card"
+      className={cn(
+        'group relative overflow-hidden rounded-xl border border-border bg-card',
+        isClickable && 'cursor-pointer'
+      )}
       whileHover={{ scale: 1.02 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onClick={handleClick}
+      role={isClickable ? 'button' : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (isClickable && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
     >
       {/* 9:16 aspect ratio container */}
       <div className="aspect-[9/16] relative">
@@ -102,6 +122,25 @@ export function VideoCard({ video }: VideoCardProps) {
         {isVideoLoading && isHovering && canPlayVideo && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/30">
             <Loader2 className="w-8 h-8 text-white animate-spin" />
+          </div>
+        )}
+
+        {/* Play icon overlay for completed videos (visible on hover when not playing) */}
+        {canPlayVideo && isHovering && !isVideoLoading && (
+          <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+            <div className="p-4 rounded-full bg-black/50 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <Play className="w-8 h-8 text-white fill-white" />
+            </div>
+          </div>
+        )}
+
+        {/* Processing indicator for in-progress videos */}
+        {video.status !== 'completed' && video.status !== 'pending' && video.status !== 'failed' && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-sm">
+              <Loader2 className="w-4 h-4 text-white animate-spin" />
+              <span className="text-sm text-white font-medium">Processing...</span>
+            </div>
           </div>
         )}
 

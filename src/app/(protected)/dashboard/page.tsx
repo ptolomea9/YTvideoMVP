@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { VideoCard } from '@/components/dashboard/VideoCard';
+import { VideoGallery } from '@/components/dashboard/VideoGallery';
 import { Button } from '@/components/ui/button';
 import type { VideoWithListing } from '@/types/video';
 
@@ -78,11 +78,7 @@ export default async function DashboardPage() {
 
       {/* Video grid or empty state */}
       {typedVideos.length > 0 ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {typedVideos.map((video) => (
-            <VideoCard key={video.id} video={video} />
-          ))}
-        </div>
+        <VideoGallery videos={typedVideos} />
       ) : (
         <EmptyState />
       )}
