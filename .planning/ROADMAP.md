@@ -17,7 +17,7 @@ None
 - [x] **Phase 1: Foundation** - Next.js 15 + Supabase schema, auth, and RLS ✓
 - [x] **Phase 2: Create Wizard** - Four-step /create flow for video generation ✓
 - [x] **Phase 3: n8n Integration** - Debug workflow and video generation pipeline ✓
-- [ ] **Phase 4: Dashboard** - Video gallery with progress and downloads
+- [x] **Phase 4: Dashboard** - Video gallery with progress and downloads ✓
 - [ ] **Phase 5: Payments** - Stripe subscriptions and credit system
 - [ ] **Phase 6: Settings** - Subscription management and branding
 
@@ -76,7 +76,7 @@ Plans:
 - [x] 04-01: Video gallery layout with 9:16 cards ✓
 - [x] 04-02: Hover autoplay and video player ✓
 - [x] 04-03: Realtime progress states during generation ✓
-- [ ] 04-04: Media kit download (branded + unbranded)
+- [x] 04-04: Media kit download (branded + unbranded) ✓
 
 ### Phase 5: Payments
 **Goal**: Stripe integration with Starter/Pro/Agency tiers, credit tracking, and $15 overage charging
@@ -111,6 +111,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Foundation | 3/3 | ✓ Complete | 2026-01-13 |
 | 2. Create Wizard | 6/6 | ✓ Complete | 2026-01-13 |
 | 3. n8n Integration | 7/7 | ✓ Complete | 2026-01-14 |
-| 4. Dashboard | 3/4 | In progress | - |
+| 4. Dashboard | 4/4 | ✓ Complete | 2026-01-14 |
 | 5. Payments | 0/3 | Not started | - |
 | 6. Settings | 0/3 | Not started | - |

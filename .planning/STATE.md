@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-13)
 
 **Core value:** Effortless for non-technical agents. The entire flow—from photo upload to cinematic video—must feel magical and require zero technical expertise.
-**Current focus:** Phase 4 — Dashboard
+**Current focus:** Phase 5 — Payments
 
 ## Current Position
 
-Phase: 4 of 6 (Dashboard)
-Plan: 3 of 4 in current phase
-Status: In progress
-Last activity: 2026-01-14 — Completed 04-03 (Realtime progress states)
+Phase: 4 of 6 (Dashboard) ✓ Complete
+Plan: 4 of 4 in current phase
+Status: Phase complete
+Last activity: 2026-01-14 — Completed 04-04 (Media kit download)
 
-Progress: ███████████████████████░░░░░░░ 73%
+Progress: ███████████████████████░░░░░░░ 77%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 19
-- Average duration: 11 min
-- Total execution time: 3.4 hours
+- Total plans completed: 20
+- Average duration: 10 min
+- Total execution time: 3.3 hours
 
 **By Phase:**
 
@@ -30,10 +30,10 @@ Progress: ███████████████████████�
 | 1. Foundation | 3/3 ✓ | 18 min | 6 min |
 | 2. Create Wizard | 6/6 ✓ | 102 min | 17 min |
 | 3. n8n Integration | 7/7 ✓ | 57 min | 8 min |
-| 4. Dashboard | 3/4 | 17 min | 6 min |
+| 4. Dashboard | 4/4 ✓ | 19 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: 5m, 12m, 3m, 7m, 7m
+- Last 5 plans: 12m, 3m, 7m, 7m, 2m
 - Trend: Fast (UI components)
 
 ## Accumulated Context
@@ -83,6 +83,7 @@ Recent decisions affecting current work:
 - **Closing card approach**: 5-second branded scene appended in same Code node (not separate node), renders in single json2video call with main video. Template captions apply only to Scene 1.
 - **Completion webhook**: Service role client for n8n callbacks bypasses RLS. N8N_WEBHOOK_SECRET Bearer token validates authenticity.
 - **Realtime notifications**: VideoStatusProvider wraps protected layout children; useVideoStatusSubscription hook shows toasts on status changes.
+- **Media kit download**: Direct browser download (no server proxy) since video URLs are publicly accessible. API validates ownership via RLS before returning URLs. Filenames sanitized from listing address.
 
 ### Deferred Issues
 
@@ -95,6 +96,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-14
-Stopped at: Completed 04-03 - Realtime progress states during generation
-Next up: 04-04 - Media kit download (branded + unbranded)
+Stopped at: Completed Phase 4 (Dashboard) - All 4 plans done
+Next up: Phase 5 (Payments) - Stripe subscriptions and credit system
 Resume file: None
