@@ -15,6 +15,7 @@ import {
   type WizardImage,
   type ScriptSection,
   type StyleOptions,
+  type EnhancementPreset,
   initialWizardState,
 } from "./types";
 
@@ -91,6 +92,17 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
         error: null,
       };
 
+    case "UPDATE_IMAGE_ENHANCEMENT":
+      return {
+        ...state,
+        images: state.images.map((img) =>
+          img.id === action.payload.imageId
+            ? { ...img, enhancement: action.payload.preset }
+            : img
+        ),
+        error: null,
+      };
+
     case "UPDATE_SCRIPT":
       return {
         ...state,
@@ -149,6 +161,7 @@ interface WizardContextValue {
   addImages: (images: WizardImage[]) => void;
   removeImage: (imageId: string) => void;
   reorderImages: (images: WizardImage[]) => void;
+  updateImageEnhancement: (imageId: string, preset: EnhancementPreset) => void;
   updateScript: (sections: ScriptSection[]) => void;
   updateScriptSection: (section: ScriptSection) => void;
   setStyleOptions: (options: Partial<StyleOptions>) => void;
@@ -195,6 +208,14 @@ export function WizardProvider({ children }: { children: ReactNode }) {
   const reorderImages = useCallback(
     (images: WizardImage[]) =>
       dispatch({ type: "REORDER_IMAGES", payload: images }),
+    []
+  );
+  const updateImageEnhancement = useCallback(
+    (imageId: string, preset: EnhancementPreset) =>
+      dispatch({
+        type: "UPDATE_IMAGE_ENHANCEMENT",
+        payload: { imageId, preset },
+      }),
     []
   );
   const updateScript = useCallback(
@@ -260,6 +281,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
     addImages,
     removeImage,
     reorderImages,
+    updateImageEnhancement,
     updateScript,
     updateScriptSection,
     setStyleOptions,
