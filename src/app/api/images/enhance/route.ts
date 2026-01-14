@@ -9,6 +9,8 @@ import type { EnhancementPreset } from "@/lib/wizard/types";
 const ENHANCEMENT_PROMPTS: Record<Exclude<EnhancementPreset, "original">, string> = {
   golden_hour:
     "Transform this real estate photo with warm golden hour lighting. Add soft warm sunlight, enhance the sky with sunset colors, make the scene feel inviting and luxurious with amber and gold tones. Maintain architectural details.",
+  sunset_sky:
+    "Replace ONLY the sky in this real estate photo with a beautiful golden sunset sky with warm orange and pink clouds. Keep the property, landscaping, driveway, and all foreground elements exactly as they are - do not modify anything except the sky area. The sky replacement should look natural and blend seamlessly with the existing lighting on the property.",
   hdr:
     "Enhance this real estate photo with HDR-style processing. Boost dynamic range, bring out shadow details, enhance highlights, improve clarity and sharpness. Make the image look professional and magazine-quality.",
   vivid:

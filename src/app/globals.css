@@ -149,6 +149,11 @@
   filter: sepia(0.3) saturate(1.4) brightness(1.1) hue-rotate(-10deg);
 }
 
+.enhancement-sunset-sky {
+  /* Subtle warm tint to hint at sky change - actual replacement done by AI */
+  filter: brightness(1.05) saturate(1.1);
+}
+
 .enhancement-hdr {
   filter: contrast(1.15) brightness(1.05) saturate(1.2);
 }

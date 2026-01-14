@@ -55,6 +55,7 @@ interface AnalyzedImage {
 const ENHANCEMENT_FILTER_CLASSES: Record<EnhancementPreset, string> = {
   original: "",
   golden_hour: "enhancement-golden-hour",
+  sunset_sky: "enhancement-sunset-sky",
   hdr: "enhancement-hdr",
   vivid: "enhancement-vivid",
 };
@@ -62,11 +63,12 @@ const ENHANCEMENT_FILTER_CLASSES: Record<EnhancementPreset, string> = {
 /**
  * Enhancement presets for image processing.
  */
-const ENHANCEMENT_PRESETS: { value: EnhancementPreset; label: string }[] = [
+const ENHANCEMENT_PRESETS: { value: EnhancementPreset; label: string; description?: string }[] = [
   { value: "original", label: "Original" },
-  { value: "golden_hour", label: "Golden Hour" },
-  { value: "hdr", label: "HDR" },
-  { value: "vivid", label: "Vivid" },
+  { value: "golden_hour", label: "Golden Hour", description: "Warm tint on entire image" },
+  { value: "sunset_sky", label: "Sunset Sky", description: "Replace sky only" },
+  { value: "hdr", label: "HDR", description: "Enhanced details & contrast" },
+  { value: "vivid", label: "Vivid", description: "Saturated colors" },
 ];
 
 /**

@@ -65,7 +65,8 @@ export type RoomType =
  */
 export type EnhancementPreset =
   | "original"      // No enhancement
-  | "golden_hour"   // Warm sunset lighting, sky enhancement
+  | "golden_hour"   // Warm sunset lighting on entire image
+  | "sunset_sky"    // Replace sky only with golden sunset (exteriors)
   | "hdr"           // High dynamic range, detail enhancement
   | "vivid";        // Saturated colors, contrast boost
 
