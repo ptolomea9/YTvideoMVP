@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-13)
 ## Current Position
 
 Phase: 3 of 6 (n8n Integration)
-Plan: 5 of 7 in current phase (03-05 complete)
+Plan: 6 of 7 in current phase (03-06 complete)
 Status: In progress
-Last activity: 2026-01-14 — Completed 03-05 (Beat-sync timing wired through workflow)
+Last activity: 2026-01-14 — Completed 03-06 (Branded closing card added to video composition)
 
-Progress: ████████████████░░░░░░░░░░░░░░ 54%
+Progress: █████████████████░░░░░░░░░░░░░ 58%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 14
+- Total plans completed: 15
 - Average duration: 11 min
-- Total execution time: 2.7 hours
+- Total execution time: 2.8 hours
 
 **By Phase:**
 
@@ -29,10 +29,10 @@ Progress: ████████████████░░░░░░░�
 |-------|-------|-------|----------|
 | 1. Foundation | 3/3 ✓ | 18 min | 6 min |
 | 2. Create Wizard | 6/6 ✓ | 102 min | 17 min |
-| 3. n8n Integration | 5/7 | 40 min | 8 min |
+| 3. n8n Integration | 6/7 | 45 min | 8 min |
 
 **Recent Trend:**
-- Last 5 plans: 24m, 12m, 5m, 12m, 4m
+- Last 5 plans: 12m, 5m, 12m, 4m, 5m
 - Trend: Fast (n8n MCP automation)
 
 ## Accumulated Context
@@ -79,6 +79,7 @@ Recent decisions affecting current work:
 - **Wizard validation minimums**: Min 5 images (one per section), min 50 chars per script section (for proper TTS timing). Fallback logic reuses images when sections lack matching room types.
 - **Script routing in n8n**: Wizard-provided scripts (webhookResponse) bypass GPT generation and route directly to ElevenLabs TTS. Payloads without webhookResponse fall back to GPT flow.
 - **imageTransitionTimes calculation**: First snare hit per narration gap selected as transition point. Avoids clustered transitions - one punchy beat per lull.
+- **Closing card approach**: 5-second branded scene appended in same Code node (not separate node), renders in single json2video call with main video. Template captions apply only to Scene 1.
 
 ### Deferred Issues
 
@@ -91,6 +92,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-14
-Stopped at: Completed 03-05 - Beat-sync timing calculation wired through n8n workflow
-Next up: 03-06 - json2video dual-render (branded + unbranded)
+Stopped at: Completed 03-06 - Branded closing card added to video composition
+Next up: 03-07 - Completion webhook and status updates
 Resume file: None
