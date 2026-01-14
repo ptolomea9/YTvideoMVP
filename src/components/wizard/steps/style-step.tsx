@@ -71,9 +71,9 @@ export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
   const [loadingLibrary, setLoadingLibrary] = React.useState(false);
   const [libraryError, setLibraryError] = React.useState<string | null>(null);
   const [libraryFilters, setLibraryFilters] = React.useState({
-    gender: "",
-    age: "",
-    accent: "",
+    gender: "all",
+    age: "all",
+    accent: "all",
     search: "",
   });
 
@@ -128,9 +128,9 @@ export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
     setLibraryError(null);
     try {
       const params = new URLSearchParams();
-      if (libraryFilters.gender) params.set("gender", libraryFilters.gender);
-      if (libraryFilters.age) params.set("age", libraryFilters.age);
-      if (libraryFilters.accent) params.set("accent", libraryFilters.accent);
+      if (libraryFilters.gender && libraryFilters.gender !== "all") params.set("gender", libraryFilters.gender);
+      if (libraryFilters.age && libraryFilters.age !== "all") params.set("age", libraryFilters.age);
+      if (libraryFilters.accent && libraryFilters.accent !== "all") params.set("accent", libraryFilters.accent);
       if (libraryFilters.search) params.set("search", libraryFilters.search);
       params.set("page_size", "20");
 
@@ -511,7 +511,7 @@ export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
                         <SelectValue placeholder="Any" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Any</SelectItem>
+                        <SelectItem value="all">Any</SelectItem>
                         <SelectItem value="male">Male</SelectItem>
                         <SelectItem value="female">Female</SelectItem>
                       </SelectContent>
@@ -529,7 +529,7 @@ export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
                         <SelectValue placeholder="Any" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Any</SelectItem>
+                        <SelectItem value="all">Any</SelectItem>
                         <SelectItem value="young">Young</SelectItem>
                         <SelectItem value="middle_aged">Middle Aged</SelectItem>
                         <SelectItem value="old">Old</SelectItem>
@@ -548,7 +548,7 @@ export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
                         <SelectValue placeholder="Any" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Any</SelectItem>
+                        <SelectItem value="all">Any</SelectItem>
                         <SelectItem value="american">American</SelectItem>
                         <SelectItem value="british">British</SelectItem>
                         <SelectItem value="australian">Australian</SelectItem>
