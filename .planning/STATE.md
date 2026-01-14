@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-13)
 ## Current Position
 
 Phase: 3 of 6 (n8n Integration)
-Plan: 6 of 7 in current phase (03-06 complete)
-Status: In progress
-Last activity: 2026-01-14 — Completed 03-06 (Branded closing card added to video composition)
+Plan: 7 of 7 in current phase (03-07 complete)
+Status: Phase complete
+Last activity: 2026-01-14 — Completed 03-07 (Completion webhook and realtime notifications)
 
-Progress: █████████████████░░░░░░░░░░░░░ 58%
+Progress: ████████████████████░░░░░░░░░░ 62%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 15
+- Total plans completed: 16
 - Average duration: 11 min
-- Total execution time: 2.8 hours
+- Total execution time: 3.0 hours
 
 **By Phase:**
 
@@ -29,10 +29,10 @@ Progress: █████████████████░░░░░░�
 |-------|-------|-------|----------|
 | 1. Foundation | 3/3 ✓ | 18 min | 6 min |
 | 2. Create Wizard | 6/6 ✓ | 102 min | 17 min |
-| 3. n8n Integration | 6/7 | 45 min | 8 min |
+| 3. n8n Integration | 7/7 ✓ | 57 min | 8 min |
 
 **Recent Trend:**
-- Last 5 plans: 12m, 5m, 12m, 4m, 5m
+- Last 5 plans: 5m, 12m, 4m, 5m, 12m
 - Trend: Fast (n8n MCP automation)
 
 ## Accumulated Context
@@ -80,6 +80,8 @@ Recent decisions affecting current work:
 - **Script routing in n8n**: Wizard-provided scripts (webhookResponse) bypass GPT generation and route directly to ElevenLabs TTS. Payloads without webhookResponse fall back to GPT flow.
 - **imageTransitionTimes calculation**: First snare hit per narration gap selected as transition point. Avoids clustered transitions - one punchy beat per lull.
 - **Closing card approach**: 5-second branded scene appended in same Code node (not separate node), renders in single json2video call with main video. Template captions apply only to Scene 1.
+- **Completion webhook**: Service role client for n8n callbacks bypasses RLS. N8N_WEBHOOK_SECRET Bearer token validates authenticity.
+- **Realtime notifications**: VideoStatusProvider wraps protected layout children; useVideoStatusSubscription hook shows toasts on status changes.
 
 ### Deferred Issues
 
@@ -92,6 +94,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-14
-Stopped at: Completed 03-06 - Branded closing card added to video composition
-Next up: 03-07 - Completion webhook and status updates
+Stopped at: Completed 03-07 - Phase 3 complete (n8n Integration)
+Next up: Phase 4 - Dashboard (04-01)
 Resume file: None
