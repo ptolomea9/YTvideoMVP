@@ -41,6 +41,106 @@ const SECTION_CONFIG: {
 ];
 
 /**
+ * Room type groups for logical tour segments.
+ */
+const ROOM_GROUPS: Record<string, RoomType[]> = {
+  exterior_approach: ["exterior"],
+  outdoor_amenities: ["outdoor"],
+  interior_main: ["entry", "living", "kitchen", "dining"],
+  interior_private: ["master_bedroom", "bedroom", "bathroom"],
+};
+
+/**
+ * Get the logical group for a room type.
+ */
+function getRoomGroup(roomType: RoomType): string {
+  for (const [group, types] of Object.entries(ROOM_GROUPS)) {
+    if (types.includes(roomType)) return group;
+  }
+  return "other";
+}
+
+/**
+ * Transition phrase suggestions based on room group changes.
+ */
+const TRANSITION_HINTS: Record<string, Record<string, string>> = {
+  exterior_approach: {
+    outdoor_amenities: "As we explore the grounds...",
+    interior_main: "Step inside and discover...",
+    interior_private: "Moving through to the private spaces...",
+  },
+  outdoor_amenities: {
+    exterior_approach: "Returning to the front...",
+    interior_main: "Now let's head inside...",
+    interior_private: "Inside, the private quarters await...",
+  },
+  interior_main: {
+    exterior_approach: "Back outside...",
+    outdoor_amenities: "The outdoor living continues...",
+    interior_private: "The private retreat begins...",
+  },
+  interior_private: {
+    exterior_approach: "Stepping back outside...",
+    outdoor_amenities: "The outdoor amenities...",
+    interior_main: "Returning to the living spaces...",
+  },
+  other: {
+    exterior_approach: "Moving on...",
+    outdoor_amenities: "Continuing the tour...",
+    interior_main: "Exploring further...",
+    interior_private: "And finally...",
+  },
+};
+
+/**
+ * Transition point between images.
+ */
+interface TransitionPoint {
+  afterImageIndex: number;
+  fromGroup: string;
+  toGroup: string;
+  hint: string;
+}
+
+/**
+ * Analyze image sequence and identify transition points.
+ */
+function analyzeTransitions(images: ImageInput[]): TransitionPoint[] {
+  const transitions: TransitionPoint[] = [];
+
+  for (let i = 0; i < images.length - 1; i++) {
+    const currentGroup = getRoomGroup(images[i].roomType);
+    const nextGroup = getRoomGroup(images[i + 1].roomType);
+
+    if (currentGroup !== nextGroup) {
+      const hint =
+        TRANSITION_HINTS[currentGroup]?.[nextGroup] ||
+        "Continuing our tour...";
+      transitions.push({
+        afterImageIndex: i,
+        fromGroup: currentGroup,
+        toGroup: nextGroup,
+        hint,
+      });
+    }
+  }
+
+  return transitions;
+}
+
+/**
+ * Get the section type for a room type.
+ */
+function getSectionForRoomType(roomType: RoomType): ScriptSectionType {
+  for (const section of SECTION_CONFIG) {
+    if (section.roomTypes.includes(roomType)) {
+      return section.type;
+    }
+  }
+  return "living"; // default for "other"
+}
+
+/**
  * Input types for the API.
  */
 interface PropertyInput {
@@ -63,6 +163,7 @@ interface ImageInput {
   label: string;
   features: string[];
   roomType: RoomType;
+  order: number;
 }
 
 interface GeneratedSection {
@@ -92,30 +193,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Group images by section
+    // Sort images by user order
+    const sortedImages = [...images].sort((a, b) => a.order - b.order);
+
+    // Group images by section (maintaining user order within each section)
     const sectionGroups = new Map<ScriptSectionType, ImageInput[]>();
     for (const section of SECTION_CONFIG) {
       sectionGroups.set(section.type, []);
     }
 
-    for (const image of images) {
-      // Find the section this image belongs to
-      let placed = false;
-      for (const section of SECTION_CONFIG) {
-        if (section.roomTypes.includes(image.roomType)) {
-          sectionGroups.get(section.type)!.push(image);
-          placed = true;
-          break;
-        }
-      }
-      // Default "other" to living section
-      if (!placed) {
-        sectionGroups.get("living")!.push(image);
-      }
+    for (const image of sortedImages) {
+      const sectionType = getSectionForRoomType(image.roomType);
+      sectionGroups.get(sectionType)!.push(image);
     }
 
-    // Build the GPT-4 prompt
-    const prompt = buildScriptPrompt(propertyData, sectionGroups);
+    // Build the GPT-4 prompt with order-aware, transition-rich approach
+    const prompt = buildScriptPrompt(propertyData, sortedImages);
 
     // Call GPT-4
     const response = await getOpenAI().chat.completions.create({
@@ -185,74 +278,60 @@ export async function POST(request: NextRequest) {
 
 /**
  * Build the prompt for GPT-4 script generation.
+ * Uses user's image order and detects transitions between room types.
  */
 function buildScriptPrompt(
   property: PropertyInput,
-  sectionGroups: Map<ScriptSectionType, ImageInput[]>
+  sortedImages: ImageInput[]
 ): string {
   const formatPrice = (price: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(price);
 
-  // Build section context
-  const sectionDescriptions: string[] = [];
+  // Analyze transitions between images
+  const transitions = analyzeTransitions(sortedImages);
 
-  // Opening section (Exterior)
-  const openingImages = sectionGroups.get("opening") || [];
-  sectionDescriptions.push(`
-**OPENING SECTION** (Exterior/Curb Appeal)
-Images: ${openingImages.length > 0 ? openingImages.map((img) => `"${img.label}" (${img.features.join(", ")})`).join("; ") : "None"}
-Goal: Attention-grabbing hook with property type and standout exterior feature. Set the tone.
-`);
+  // Build image sequence description with transition markers
+  let imageSequence = "";
+  for (let i = 0; i < sortedImages.length; i++) {
+    const img = sortedImages[i];
+    const sectionType = getSectionForRoomType(img.roomType);
+    imageSequence += `${i + 1}. "${img.label}" [${img.roomType} → ${sectionType}]`;
+    if (img.features.length > 0) {
+      imageSequence += ` - ${img.features.join(", ")}`;
+    }
+    imageSequence += "\n";
 
-  // Outdoor section - comes RIGHT AFTER exterior, before entering the house
-  // Emphasize POIs must be mentioned
-  const outdoorImages = sectionGroups.get("outdoor") || [];
-  const neighborhoodPOIs = property.features.length > 0
-    ? `
-**IMPORTANT - Neighborhood POIs (MUST mention):** ${property.features.join(", ")}
-These nearby amenities are key selling points. Weave them naturally into the narration, e.g., "Just steps from [POI]" or "Minutes from [POI] and [POI]".`
-    : "";
-  sectionDescriptions.push(`
-**OUTDOOR LIVING SECTION** (Backyard, Patio, Pool, Amenities)
-Images: ${outdoorImages.length > 0 ? outdoorImages.map((img) => `"${img.label}" (${img.features.join(", ")})`).join("; ") : "None"}${neighborhoodPOIs}
-Goal: Showcase the grounds and outdoor lifestyle right after the exterior. Highlight entertaining potential, pool, patio features. Mention neighborhood conveniences and location advantages.
-`);
-
-  // Living section - after showing the grounds, we enter the house
-  const livingImages = sectionGroups.get("living") || [];
-  sectionDescriptions.push(`
-**LIVING SPACES SECTION** (Entry, Living, Kitchen, Dining)
-Images: ${livingImages.length > 0 ? livingImages.map((img) => `"${img.label}" (${img.features.join(", ")})`).join("; ") : "None"}
-Goal: Now step inside the home. Flow through main living areas, referencing specific image labels and features naturally. Transition from the entry through the open-concept spaces.
-`);
-
-  // Private section - bedrooms and bathrooms last
-  const privateImages = sectionGroups.get("private") || [];
-  sectionDescriptions.push(`
-**PRIVATE RETREAT SECTION** (Master Bedroom, Bedrooms, Bathrooms)
-Images: ${privateImages.length > 0 ? privateImages.map((img) => `"${img.label}" (${img.features.join(", ")})`).join("; ") : "None"}
-Goal: Intimate, restful spaces. Highlight master suite first, then other bedrooms, then spa-like bathroom features. End this section setting up the closing CTA.
-`);
-
-  // Closing section - include agent contact if available
-  const agentContactInfo: string[] = [];
-  if (property.agentPhone) {
-    agentContactInfo.push(`Phone: ${property.agentPhone}`);
+    // Add transition marker if this is a transition point
+    const transition = transitions.find((t) => t.afterImageIndex === i);
+    if (transition) {
+      imageSequence += `   ↳ TRANSITION HINT: "${transition.hint}"\n`;
+    }
   }
-  if (property.agentSocial) {
-    agentContactInfo.push(`Social: ${property.agentSocial}`);
-  }
-  const agentContext = agentContactInfo.length > 0
-    ? `\nAgent contact to reference: ${agentContactInfo.join(", ")}\nNote: A contact card with agent info will appear after this section, so the narration should set up a seamless transition to that visual.`
-    : "";
 
-  sectionDescriptions.push(`
-**CLOSING SECTION** (Call-to-Action)
-No images - this wraps up the tour.${agentContext}
-Goal: Compelling summary and CTA with property address. Create urgency. End with a clear call to action inviting viewers to reach out.
-`);
+  // Neighborhood POIs instruction
+  const neighborhoodPOIs =
+    property.features.length > 0
+      ? `\n**NEIGHBORHOOD POIs (weave naturally into outdoor/exterior moments):**\n${property.features.join(", ")}`
+      : "";
 
-  return `Create a cinematic video narration script for this property:
+  // Agent contact for closing
+  const agentContact =
+    property.agentPhone || property.agentSocial
+      ? `\n**AGENT CONTACT (reference in closing):** ${[property.agentPhone, property.agentSocial].filter(Boolean).join(", ")}`
+      : "";
+
+  // Build transition guidelines
+  const transitionGuidelines =
+    transitions.length > 0
+      ? transitions
+          .map(
+            (t) =>
+              `- After image ${t.afterImageIndex + 1}: Use transition like "${t.hint}" (${t.fromGroup} → ${t.toGroup})`
+          )
+          .join("\n")
+      : "- No major transitions needed - images flow naturally within similar spaces";
+
+  return `Create a cinematic video narration script for this property tour.
 
 **PROPERTY DETAILS:**
 - Address: ${property.address}, ${property.city}, ${property.state}
@@ -260,32 +339,41 @@ Goal: Compelling summary and CTA with property address. Create urgency. End with
 - Price: ${formatPrice(property.price)}
 - Specs: ${property.beds} beds | ${property.baths} baths | ${property.sqft.toLocaleString()} sq ft
 - Description: ${property.description || "Luxury property"}
+${neighborhoodPOIs}${agentContact}
 
-**SCRIPT REQUIREMENTS:**
-- Each section should be 40-60 words (~12-18 seconds of narration)
-- Total script should be ~60-90 seconds
-- Luxury real estate voice: sophisticated, evocative, lifestyle-focused
-- Reference specific image labels and features naturally in the narrative
-- Each section should flow smoothly into the next
-- Opening should hook immediately
-- Closing should create urgency with a strong CTA
+**IMAGE SEQUENCE (in exact order to narrate):**
+${imageSequence}
 
-**SECTIONS TO WRITE:**
-${sectionDescriptions.join("\n")}
+**CRITICAL REQUIREMENTS:**
+1. **FOLLOW THE EXACT IMAGE ORDER** - The user has arranged these images intentionally. Narrate them in this sequence.
+2. **SMOOTH TRANSITIONS** - When room types change between images, use natural transition phrases (hints provided above).
+3. **REFERENCE EACH IMAGE** - Mention the label and key features of each image as you narrate.
+4. **COHESIVE FLOW** - Despite section breaks, the narrative should feel like one continuous tour.
+
+**TRANSITION GUIDELINES:**
+${transitionGuidelines}
+
+**SCRIPT STRUCTURE:**
+- Opening (40-60 words): Hook with exterior/first images
+- Outdoor (40-60 words): If outdoor images exist, describe them (can be empty if no outdoor images)
+- Living Spaces (40-60 words): Interior main living areas
+- Private Retreat (40-60 words): Bedrooms, bathrooms, private spaces
+- Closing (40-60 words): Final CTA with property address
+
+**IMPORTANT:** Write sections based on where images appear in the sequence. If the user has reordered images so that a bedroom appears early, the bedroom content goes in the section where it naturally fits based on the image order.
 
 **OUTPUT FORMAT:**
-Return a JSON object with a "sections" array containing 5 objects, each with:
-- "type": the section type (opening, outdoor, living, private, closing)
-- "content": the narration text for that section
+Return JSON with "sections" array. Each section should contain narration for its relevant images IN THE ORDER they appear in the sequence above:
 
-Example:
 {
   "sections": [
-    {"type": "opening", "content": "Welcome to..."},
-    {"type": "outdoor", "content": "The grounds feature..."},
-    {"type": "living", "content": "Step inside..."},
-    {"type": "private", "content": "Retreat to..."},
-    {"type": "closing", "content": "Don't miss..."}
+    {"type": "opening", "content": "...narration for exterior/first images..."},
+    {"type": "outdoor", "content": "...narration for outdoor images, or brief transition if none..."},
+    {"type": "living", "content": "...narration for living area images..."},
+    {"type": "private", "content": "...narration for private space images..."},
+    {"type": "closing", "content": "...CTA with property address..."}
   ]
-}`;
+}
+
+If a section has no images, write a brief (10-15 word) transitional sentence that maintains flow.`;
 }

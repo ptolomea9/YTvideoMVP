@@ -398,12 +398,15 @@ export const ScriptStep = React.forwardRef<ScriptStepHandle>(
               agentPhone: propertyData.agentPhone || "",
               agentSocial: propertyData.agentSocial || "",
             },
-            images: images.map((img) => ({
-              id: img.id,
-              label: img.label,
-              features: img.features,
-              roomType: img.roomType,
-            })),
+            images: [...images]
+              .sort((a, b) => a.order - b.order)
+              .map((img, index) => ({
+                id: img.id,
+                label: img.label,
+                features: img.features,
+                roomType: img.roomType,
+                order: index,
+              })),
           }),
         });
 
@@ -452,12 +455,15 @@ export const ScriptStep = React.forwardRef<ScriptStepHandle>(
               agentPhone: propertyData.agentPhone || "",
               agentSocial: propertyData.agentSocial || "",
             },
-            images: images.map((img) => ({
-              id: img.id,
-              label: img.label,
-              features: img.features,
-              roomType: img.roomType,
-            })),
+            images: [...images]
+              .sort((a, b) => a.order - b.order)
+              .map((img, index) => ({
+                id: img.id,
+                label: img.label,
+                features: img.features,
+                roomType: img.roomType,
+                order: index,
+              })),
           }),
         });
 
