@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Dropzone, ImagePreviewGrid, type ImagePreview } from "@/components/ui/dropzone";
+import { ImageCompareSlider } from "@/components/ui/image-compare-slider";
 import { cn } from "@/lib/utils";
 import { useWizard } from "@/lib/wizard/wizard-context";
 import type { WizardImage, RoomType, EnhancementPreset, EnhancementStatus, EnhancedUrlCache } from "@/lib/wizard/types";
@@ -285,28 +286,38 @@ function ImagePreviewDialog({
           </DialogTitle>
         </DialogHeader>
 
-        {/* Large image preview */}
-        <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={currentEnhancedUrl || image.url}
-            alt={image.label}
-            className={cn(
-              "h-full w-full object-contain transition-all duration-300",
-              // Only apply CSS filter for non-sunset_sky presets when previewing
-              image.enhancementStatus === "previewing" &&
-                hasCssPreview(image.enhancement) &&
-                ENHANCEMENT_FILTER_CLASSES[image.enhancement]
-            )}
+        {/* Large image preview - use comparison slider when enhanced */}
+        {isApplied && currentEnhancedUrl ? (
+          <ImageCompareSlider
+            beforeSrc={image.url}
+            afterSrc={currentEnhancedUrl}
+            beforeLabel="Original"
+            afterLabel={image.enhancement === "sunset_sky" ? "Sunset Sky" : image.enhancement.replace("_", " ")}
+            className="aspect-video w-full bg-muted"
           />
-          {isPreviewing && (
-            <div className="absolute bottom-3 left-3 rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground">
-              {isSunsetSky
-                ? "No preview available — AI sky replacement required"
-                : "CSS Preview — select Apply for full quality"}
-            </div>
-          )}
-        </div>
+        ) : (
+          <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={image.url}
+              alt={image.label}
+              className={cn(
+                "h-full w-full object-contain transition-all duration-300",
+                // Only apply CSS filter for non-sunset_sky presets when previewing
+                isPreviewing &&
+                  hasCssPreview(image.enhancement) &&
+                  ENHANCEMENT_FILTER_CLASSES[image.enhancement]
+              )}
+            />
+            {isPreviewing && (
+              <div className="absolute bottom-3 left-3 rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground">
+                {isSunsetSky
+                  ? "No preview available — AI sky replacement required"
+                  : "CSS Preview — drag slider after applying to compare"}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Enhancement controls */}
         <div className="flex flex-col gap-3">
