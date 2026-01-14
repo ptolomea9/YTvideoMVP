@@ -903,25 +903,27 @@ export const StyleStep = React.forwardRef<StyleStepHandle>((_, ref) => {
             )}
           </div>
 
-          {/* MLS Toggle */}
-          <div className="flex items-center justify-between rounded-lg border p-4">
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="mls-toggle" className="text-base font-medium">
-                  MLS Dual-Output
-                </Label>
-                <Badge variant="outline" className="text-xs">Recommended</Badge>
+          {/* MLS Toggle - Hidden for now, keeping code for later */}
+          {false && (
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="mls-toggle" className="text-base font-medium">
+                    MLS Dual-Output
+                  </Label>
+                  <Badge variant="outline" className="text-xs">Recommended</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Generate both branded and unbranded (MLS-compliant) versions
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground">
-                Generate both branded and unbranded (MLS-compliant) versions
-              </p>
+              <Switch
+                id="mls-toggle"
+                checked={mlsDualOutput}
+                onCheckedChange={setMlsDualOutput}
+              />
             </div>
-            <Switch
-              id="mls-toggle"
-              checked={mlsDualOutput}
-              onCheckedChange={setMlsDualOutput}
-            />
-          </div>
+          )}
         </CardContent>
       </Card>
 
