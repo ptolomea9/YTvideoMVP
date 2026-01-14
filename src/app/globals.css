@@ -150,8 +150,8 @@
 }
 
 .enhancement-sunset-sky {
-  /* Subtle warm tint to hint at sky change - actual replacement done by AI */
-  filter: brightness(1.05) saturate(1.1);
+  /* Orange/warm gradient hint for sky replacement preview */
+  filter: sepia(0.15) saturate(1.3) brightness(1.05) hue-rotate(-5deg);
 }
 
 .enhancement-hdr {

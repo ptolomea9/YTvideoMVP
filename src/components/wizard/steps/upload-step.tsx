@@ -857,7 +857,13 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
 
           if (!response.ok) {
             const error = await response.json();
-            throw new Error(error.error || "Enhancement failed");
+            const errorMsg = error.error || "Enhancement failed";
+            // Show more helpful message for common errors
+            if (response.status === 503) {
+              console.error("Enhancement service not configured. Add KIE_API_KEY to .env.local");
+              alert("Enhancement service not configured.\n\nAdd KIE_API_KEY to your .env.local file to enable AI enhancements.");
+            }
+            throw new Error(errorMsg);
           }
 
           const { enhancedUrl } = await response.json();
