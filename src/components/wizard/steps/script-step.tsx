@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useWizard } from "@/lib/wizard/wizard-context";
 import type { ScriptSection, ScriptSectionType, WizardImage, PropertyData } from "@/lib/wizard/types";
+import { WIZARD_VALIDATION } from "@/lib/wizard/types";
 
 /**
  * Section configuration with icons and display info.
@@ -345,6 +346,19 @@ export const ScriptStep = React.forwardRef<ScriptStepHandle>(
         );
         if (!allHaveContent) {
           setError("All sections must have content.");
+          return false;
+        }
+        // Check minimum character count per section
+        const shortSections = scriptSections.filter(
+          (s) => s.content.trim().length < WIZARD_VALIDATION.MIN_SECTION_CHARS
+        );
+        if (shortSections.length > 0) {
+          const sectionNames = shortSections
+            .map((s) => SECTION_CONFIG[s.type].title)
+            .join(", ");
+          setError(
+            `Sections too short: ${sectionNames}. Each section needs at least ${WIZARD_VALIDATION.MIN_SECTION_CHARS} characters for proper narration timing.`
+          );
           return false;
         }
         return true;

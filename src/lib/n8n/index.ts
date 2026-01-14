@@ -8,6 +8,8 @@
 export {
   transformWizardToN8n,
   validateN8nPayload,
+  mapImagesToSections,
+  getImagesForSection,
   type N8nTourVideoPayload,
   type N8nListingVideoPayload,
   type MusicTrackMeta,

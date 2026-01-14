@@ -18,6 +18,7 @@ import { ImageCompareSlider } from "@/components/ui/image-compare-slider";
 import { cn } from "@/lib/utils";
 import { useWizard } from "@/lib/wizard/wizard-context";
 import type { WizardImage, RoomType, EnhancementPreset, EnhancementStatus, EnhancedUrlCache } from "@/lib/wizard/types";
+import { WIZARD_VALIDATION } from "@/lib/wizard/types";
 import { AlertTriangle } from "lucide-react";
 
 /**
@@ -828,6 +829,14 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
       validate: async () => {
         if (analyzedImages.length === 0) {
           setAnalyzeError("Please upload and analyze images before continuing.");
+          return false;
+        }
+
+        // Check minimum image count
+        if (analyzedImages.length < WIZARD_VALIDATION.MIN_IMAGES) {
+          setAnalyzeError(
+            `Please upload at least ${WIZARD_VALIDATION.MIN_IMAGES} images (you have ${analyzedImages.length}). Each script section needs images to display.`
+          );
           return false;
         }
 

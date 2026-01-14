@@ -18,6 +18,7 @@ import {
   type EnhancementPreset,
   type EnhancementStatus,
   initialWizardState,
+  WIZARD_VALIDATION,
 } from "./types";
 
 /**
@@ -343,10 +344,14 @@ export function WizardProvider({ children }: { children: ReactNode }) {
           return Boolean(address && city && stateCode && propertyType);
         }
         case WizardStep.UPLOAD:
-          return state.images.length > 0;
+          // Require minimum images for video generation (one per script section)
+          return state.images.length >= WIZARD_VALIDATION.MIN_IMAGES;
         case WizardStep.SCRIPT:
+          // Require all sections with minimum character count for proper TTS timing
           return state.scriptSections.length > 0 &&
-            state.scriptSections.every((s) => s.content.trim().length > 0);
+            state.scriptSections.every(
+              (s) => s.content.trim().length >= WIZARD_VALIDATION.MIN_SECTION_CHARS
+            );
         case WizardStep.STYLE:
           return Boolean(state.styleOptions.voiceId);
         default:

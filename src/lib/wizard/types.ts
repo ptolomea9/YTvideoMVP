@@ -193,6 +193,20 @@ export type WizardAction =
 /**
  * Initial state for the wizard.
  */
+/**
+ * Validation constants for video generation requirements.
+ */
+export const WIZARD_VALIDATION = {
+  /** Minimum images required (one per script section) */
+  MIN_IMAGES: 5,
+  /** Maximum images allowed */
+  MAX_IMAGES: 20,
+  /** Minimum characters per script section to avoid awkward TTS timing */
+  MIN_SECTION_CHARS: 50,
+  /** Target words per section for optimal narration */
+  TARGET_SECTION_WORDS: 50,
+} as const;
+
 export const initialWizardState: WizardState = {
   currentStep: WizardStep.DATA,
   completedSteps: [],

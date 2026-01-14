@@ -5,8 +5,118 @@
  * Maps field names and structures to match webhook payload requirements.
  */
 
-import type { PropertyData, WizardImage, ScriptSection, StyleOptions } from "@/lib/wizard/types";
+import type { PropertyData, WizardImage, ScriptSection, StyleOptions, ScriptSectionType, RoomType } from "@/lib/wizard/types";
 import { getDefaultMusicUrl } from "./music";
+
+/**
+ * Maps script section types to their preferred room types.
+ * Order matters - first match is preferred.
+ */
+const SECTION_TO_ROOM_MAPPING: Record<ScriptSectionType, RoomType[]> = {
+  opening: ["exterior"],
+  living: ["entry", "living", "kitchen", "dining"],
+  private: ["master_bedroom", "bedroom", "bathroom"],
+  outdoor: ["outdoor"],
+  closing: ["exterior", "outdoor"], // CTA often shows hero exterior or lifestyle shot
+};
+
+/**
+ * Maps images to script sections based on room type.
+ * Uses fallback logic when a section has no matching images.
+ *
+ * Algorithm:
+ * 1. For each section, find images with matching room types
+ * 2. If no matches, try fallback to "other" room type
+ * 3. If still no matches, reuse the best available image (exterior preferred)
+ *
+ * @param images - All wizard images sorted by order
+ * @param sections - Script sections
+ * @returns Map of section ID to array of image IDs
+ */
+export function mapImagesToSections(
+  images: WizardImage[],
+  sections: ScriptSection[]
+): Map<string, string[]> {
+  const mapping = new Map<string, string[]>();
+  const usedImageIds = new Set<string>();
+
+  // Sort images by order for consistent assignment
+  const sortedImages = [...images].sort((a, b) => a.order - b.order);
+
+  // First pass: assign images to sections based on room type
+  for (const section of sections) {
+    const preferredRoomTypes = SECTION_TO_ROOM_MAPPING[section.type];
+    const matchingImages = sortedImages.filter(
+      (img) => preferredRoomTypes.includes(img.roomType)
+    );
+
+    if (matchingImages.length > 0) {
+      // Use matching images, mark them as used
+      const imageIds = matchingImages.map((img) => img.id);
+      mapping.set(section.id, imageIds);
+      imageIds.forEach((id) => usedImageIds.add(id));
+    } else {
+      // No match yet - will handle in fallback pass
+      mapping.set(section.id, []);
+    }
+  }
+
+  // Second pass: handle sections with no images (fallback logic)
+  for (const section of sections) {
+    const currentImages = mapping.get(section.id) || [];
+    if (currentImages.length > 0) continue;
+
+    // Try "other" room type first
+    const otherImages = sortedImages.filter(
+      (img) => img.roomType === "other" && !usedImageIds.has(img.id)
+    );
+    if (otherImages.length > 0) {
+      mapping.set(section.id, [otherImages[0].id]);
+      usedImageIds.add(otherImages[0].id);
+      continue;
+    }
+
+    // Fallback: reuse best available image (prefer exterior for closing, any for others)
+    const fallbackPreference: RoomType[] =
+      section.type === "closing"
+        ? ["exterior", "outdoor", "living", "entry"]
+        : ["exterior", "living", "entry", "outdoor"];
+
+    let fallbackImage: WizardImage | undefined;
+    for (const roomType of fallbackPreference) {
+      fallbackImage = sortedImages.find((img) => img.roomType === roomType);
+      if (fallbackImage) break;
+    }
+
+    // Last resort: use first available image
+    if (!fallbackImage && sortedImages.length > 0) {
+      fallbackImage = sortedImages[0];
+    }
+
+    if (fallbackImage) {
+      mapping.set(section.id, [fallbackImage.id]);
+      // Note: we allow reuse here, so don't add to usedImageIds
+    }
+  }
+
+  return mapping;
+}
+
+/**
+ * Get images for a specific section with fallback support.
+ * Convenience wrapper around mapImagesToSections.
+ */
+export function getImagesForSection(
+  images: WizardImage[],
+  sections: ScriptSection[],
+  sectionId: string
+): WizardImage[] {
+  const mapping = mapImagesToSections(images, sections);
+  const imageIds = mapping.get(sectionId) || [];
+  return imageIds
+    .map((id) => images.find((img) => img.id === id))
+    .filter((img): img is WizardImage => img !== undefined);
+}
 
 /**
  * Image timing for beat-synced transitions.
