@@ -11,9 +11,11 @@ Researched the remaining Phase 3 work: json2video closing card composition, comp
 
 Key finding: json2video supports webhook destinations in the `exports` array, eliminating the need for polling. The webhook payload includes video URL, dimensions, duration, and custom `client-data` for correlation. The closing card is best implemented as a final scene in the movie object with positioned text and image elements.
 
-**Primary recommendation:** Add closing card as final scene in json2video composition, use json2video webhook callback to Next.js API route, update video status in Supabase, send email via Resend with React Email template.
+**Primary recommendation:** Add closing card as final scene in json2video composition, use json2video webhook callback to Next.js API route, update video status in Supabase, use Supabase Realtime for instant toast notifications, send email via Resend with React Email template.
 
 **Important:** Target workflow is `Qo2sirL0cDI2fVNQMJ5Eq` (Shawheen Youtube Video), not the original Youtube Video workflow.
+
+**03-07 Addition:** For realtime in-app notifications (toast + badge), use Supabase Realtime `postgres_changes` subscription. When webhook updates video status, the frontend receives the change instantly via websocket — no polling needed.
 </research_summary>
 
 <standard_stack>
@@ -31,6 +33,8 @@ Key finding: json2video supports webhook destinations in the `exports` array, el
 |---------|---------|---------|-------------|
 | resend | 4.x | Email delivery API | Sending completion notifications |
 | @react-email/components | 0.0.x | Email templates | Building celebration email |
+| sonner | 1.x | Toast notifications | In-app completion/error toasts |
+| @supabase/realtime-js | (bundled) | Realtime subscriptions | Instant status updates without polling |
 
 ### Already Established
 - ElevenLabs for TTS (integrated)
@@ -40,7 +44,8 @@ Key finding: json2video supports webhook destinations in the `exports` array, el
 
 **Installation:**
 ```bash
-npm install resend @react-email/components
+npm install resend @react-email/components sonner
+# Note: Supabase Realtime is bundled with @supabase/supabase-js
 ```
 </standard_stack>
 
@@ -261,10 +266,158 @@ export function VideoCompleteEmail({
 }
 ```
 
+### Pattern 5: Supabase Realtime for Instant Toast Notifications (03-07)
+**What:** Subscribe to video status changes for realtime in-app notifications
+**When to use:** User has app open, video completes in background
+
+**Client-side subscription hook:**
+```typescript
+// hooks/useVideoNotifications.ts
+import { useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { toast } from 'sonner';
+
+export function useVideoNotifications(userId: string) {
+  useEffect(() => {
+    const supabase = createClient();
+
+    const channel = supabase
+      .channel('video-status')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'videos',
+          filter: `user_id=eq.${userId}`
+        },
+        (payload) => {
+          const { new: video, old: oldVideo } = payload;
+
+          // Only notify on status transitions
+          if (oldVideo.status === 'pending' && video.status === 'complete') {
+            toast.success('Your video is ready!', {
+              description: 'Click to view and download',
+              action: {
+                label: 'View',
+                onClick: () => window.location.href = '/dashboard'
+              }
+            });
+          } else if (oldVideo.status === 'pending' && video.status === 'failed') {
+            toast.error('Video generation failed', {
+              description: video.error_message || 'Please try again',
+              duration: 10000
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
+}
+```
+
+**Supabase Realtime setup required:**
+```sql
+-- Enable realtime for videos table (run once in Supabase dashboard)
+ALTER PUBLICATION supabase_realtime ADD TABLE videos;
+```
+
+### Pattern 6: Dashboard Badge for Unviewed Videos (03-07)
+**What:** Track which videos user hasn't seen yet, show badge on nav
+**When to use:** User has new completed videos they haven't viewed
+
+**Database column:**
+```sql
+-- Add to videos table
+ALTER TABLE videos ADD COLUMN viewed_at TIMESTAMPTZ;
+```
+
+**Badge logic:**
+```typescript
+// Unviewed count query
+const { count } = await supabase
+  .from('videos')
+  .select('*', { count: 'exact', head: true })
+  .eq('user_id', userId)
+  .eq('status', 'complete')
+  .is('viewed_at', null);
+
+// Mark as viewed when user visits dashboard
+await supabase
+  .from('videos')
+  .update({ viewed_at: new Date().toISOString() })
+  .eq('user_id', userId)
+  .is('viewed_at', null);
+```
+
+### Pattern 7: n8n Error Workflow for Specific Error Messages (03-07)
+**What:** Capture which node failed and send specific error to Next.js
+**When to use:** External API (Kling, ElevenLabs, json2video) fails
+
+**n8n Error Workflow structure:**
+1. Error Trigger node receives: `execution.lastNodeExecuted`, `error.message`
+2. Map node name to user-friendly message
+3. HTTP Request to Next.js error webhook
+
+**Error mapping in n8n Code node:**
+```javascript
+const lastNode = $input.first().json.execution.lastNodeExecuted;
+const errorMessage = $input.first().json.error.message;
+
+const friendlyErrors = {
+  'ElevenLabs API': 'Voice generation failed',
+  'Kling API': 'Video motion generation failed',
+  'json2video': 'Final video rendering failed',
+  'Kie.ai': 'Image processing failed'
+};
+
+// Find matching error
+let userMessage = 'Video generation failed';
+for (const [key, msg] of Object.entries(friendlyErrors)) {
+  if (lastNode.includes(key)) {
+    userMessage = msg;
+    break;
+  }
+}
+
+return {
+  videoId: $input.first().json.client_data?.videoId,
+  status: 'failed',
+  error_message: userMessage,
+  technical_error: errorMessage.substring(0, 500) // Truncate for storage
+};
+```
+
+**Next.js error webhook handler:**
+```typescript
+// app/api/webhooks/video-error/route.ts
+export async function POST(request: Request) {
+  const payload = await request.json();
+
+  await supabase
+    .from('videos')
+    .update({
+      status: 'failed',
+      error_message: payload.error_message,
+      technical_error: payload.technical_error,
+      failed_at: new Date().toISOString()
+    })
+    .eq('id', payload.videoId);
+
+  return Response.json({ success: true });
+}
+```
+
 ### Anti-Patterns to Avoid
-- **Polling for video status:** Use json2video webhooks instead - more efficient and real-time
+- **Polling for video status:** Use json2video webhooks + Supabase Realtime instead - more efficient and truly real-time
 - **Hardcoding webhook URLs in n8n:** Use environment variables or dashboard connections
 - **Sending email before storage backup:** Ensure video is copied to Supabase storage before notifying user
+- **Generic error messages:** Always pass specific error from n8n so user knows which step failed
+- **Blocking on realtime connection:** Gracefully degrade if websocket fails - user can still refresh
 </architecture_patterns>
 
 <dont_hand_roll>
@@ -278,6 +431,9 @@ export function VideoCompleteEmail({
 | Email templates | Raw HTML strings | React Email | Type-safe, component-based, preview tools |
 | Email delivery | nodemailer/SMTP | Resend | Better deliverability, simpler API |
 | Video polling | setInterval loops | json2video webhook | Real-time, no wasted API calls |
+| Realtime updates | WebSocket server | Supabase Realtime | Managed infrastructure, RLS-aware |
+| Toast notifications | Custom toast impl | sonner | Accessible, styled, animation-ready |
+| Error categorization | Switch statements | Error workflow + mapping | Centralized in n8n, single source |
 
 **Key insight:** json2video's scene-based composition handles all the complexity of video rendering. The closing card is just another scene with text/image elements - no need for FFmpeg or custom video processing.
 </dont_hand_roll>
@@ -314,6 +470,24 @@ export function VideoCompleteEmail({
 **Why it happens:** z-index and element order in array determine layering
 **How to avoid:** Background elements first, text last in elements array
 **Warning signs:** Visual overlap in rendered video
+
+### Pitfall 6: Supabase Realtime Not Enabled (03-07)
+**What goes wrong:** Subscriptions connect but never receive events
+**Why it happens:** Table not added to `supabase_realtime` publication
+**How to avoid:** Run `ALTER PUBLICATION supabase_realtime ADD TABLE videos;` in SQL editor
+**Warning signs:** Channel connects (SUBSCRIBED) but no payloads received
+
+### Pitfall 7: Realtime Channel Memory Leaks (03-07)
+**What goes wrong:** Multiple subscriptions accumulate, duplicate notifications
+**Why it happens:** Missing cleanup in useEffect return, or non-unique channel names
+**How to avoid:** Always `removeChannel()` on cleanup, use unique channel names
+**Warning signs:** Toasts appearing multiple times, memory growth
+
+### Pitfall 8: Error Workflow Missing videoId (03-07)
+**What goes wrong:** Error caught but can't update correct video record
+**Why it happens:** `client_data` not available in error trigger by default
+**How to avoid:** Store videoId in workflow-level variable early, reference in error workflow
+**Warning signs:** Errors logged but video stuck in "pending" forever
 </common_pitfalls>
 
 <code_examples>
@@ -492,11 +666,15 @@ Webhook payload (agent info) → Separate image data → ...
 - [json2video Movie Structure](https://json2video.com/docs/v2/api-reference/json-syntax/movie) - Scene composition
 - [json2video Webhooks](https://json2video.com/docs/v2/api-reference/exports/webhooks) - Callback configuration
 - [json2video n8n Integration](https://json2video.com/docs/v2/no-code-integrations/n8n) - n8n setup
+- [Supabase Realtime with Next.js](https://supabase.com/docs/guides/realtime/realtime-with-nextjs) - Official realtime guide
+- [Supabase Postgres Changes](https://supabase.com/docs/guides/realtime/postgres-changes) - Subscription patterns
+- [n8n Error Handling](https://docs.n8n.io/flow-logic/error-handling/) - Error workflow setup
 
 ### Secondary (MEDIUM confidence)
 - [Supabase Storage Upload](https://supabase.com/docs/reference/javascript/storage-from-upload) - File upload patterns
 - [Resend + React Email](https://react.email/docs/integrations/resend) - Email integration
 - [n8n Webhook Docs](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.webhook/) - Callback patterns
+- [Supabase Realtime in Next.js 15](https://dev.to/lra8dev/building-real-time-magic-supabase-subscriptions-in-nextjs-15-2kmp) - Implementation patterns
 
 ### Tertiary (LOW confidence - needs validation)
 - None - all findings verified
@@ -506,10 +684,10 @@ Webhook payload (agent info) → Separate image data → ...
 ## Metadata
 
 **Research scope:**
-- Core technology: json2video API v2
-- Ecosystem: n8n, Supabase Storage, Resend, React Email
-- Patterns: Scene composition, webhook callbacks, email notifications
-- Pitfalls: URL accessibility, correlation, storage limits
+- Core technology: json2video API v2, Supabase Realtime
+- Ecosystem: n8n, Supabase Storage, Resend, React Email, sonner
+- Patterns: Scene composition, webhook callbacks, email notifications, realtime subscriptions, error workflows
+- Pitfalls: URL accessibility, correlation, storage limits, realtime setup, error mapping
 
 **Confidence breakdown:**
 - Standard stack: HIGH - already integrated, just extending
