@@ -48,10 +48,16 @@ async function pollForResult(
     }
 
     const pollResult = await pollResponse.json();
-    console.log("Kie.ai poll result:", JSON.stringify(pollResult).slice(0, 200));
+    const state = pollResult.data?.state;
+    console.log(`Kie.ai poll [${attempt + 1}/${MAX_POLL_ATTEMPTS}] state:`, state);
 
-    // Check status
-    if (pollResult.data?.status === "success") {
+    // Log more details when state changes to success
+    if (state === "success") {
+      console.log("Kie.ai success - resultJson exists:", !!pollResult.data?.resultJson);
+    }
+
+    // Check state (note: Kie.ai uses "state" not "status")
+    if (pollResult.data?.state === "success") {
       // Parse resultJson to get the URL
       try {
         const resultJson = JSON.parse(pollResult.data.resultJson);
@@ -59,13 +65,14 @@ async function pollForResult(
         if (resultUrl) {
           return { success: true, url: resultUrl };
         }
+        console.error("No resultUrls in parsed resultJson:", resultJson);
       } catch (parseError) {
-        console.error("Failed to parse resultJson:", parseError);
+        console.error("Failed to parse resultJson:", parseError, pollResult.data.resultJson);
       }
-    } else if (pollResult.data?.status === "failed") {
+    } else if (pollResult.data?.state === "failed") {
       return { success: false, error: "Enhancement task failed" };
     }
-    // Otherwise status is "pending" or "processing", continue polling
+    // Otherwise state is "waiting" or "processing", continue polling
   }
 
   return { success: false, error: "Enhancement timed out" };
