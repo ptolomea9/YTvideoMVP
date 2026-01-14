@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
-import { X } from 'lucide-react';
+import { useEffect, useRef, useCallback, useState } from 'react';
+import { X, Download } from 'lucide-react';
 import { Dialog, DialogContent, DialogOverlay, DialogPortal } from '@/components/ui/dialog';
 import { VideoWithListing } from '@/types/video';
 import { cn } from '@/lib/utils';
+import { MediaKitDialog } from './MediaKitDialog';
 
 interface VideoPlayerDialogProps {
   video: VideoWithListing | null;
@@ -19,6 +20,7 @@ interface VideoPlayerDialogProps {
  */
 export function VideoPlayerDialog({ video, open, onOpenChange }: VideoPlayerDialogProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [mediaKitOpen, setMediaKitOpen] = useState(false);
 
   // Handle space key for play/pause
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -76,13 +78,22 @@ export function VideoPlayerDialog({ video, open, onOpenChange }: VideoPlayerDial
                       {displayAddress}
                     </h3>
                   </div>
-                  <button
-                    onClick={() => onOpenChange(false)}
-                    className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-                    aria-label="Close video player"
-                  >
-                    <X className="w-5 h-5 text-white" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setMediaKitOpen(true)}
+                      className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                      aria-label="Download video"
+                    >
+                      <Download className="w-5 h-5 text-white" />
+                    </button>
+                    <button
+                      onClick={() => onOpenChange(false)}
+                      className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                      aria-label="Close video player"
+                    >
+                      <X className="w-5 h-5 text-white" />
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -102,6 +113,14 @@ export function VideoPlayerDialog({ video, open, onOpenChange }: VideoPlayerDial
           </div>
         </div>
       </DialogPortal>
+
+      {/* Media Kit Download Dialog */}
+      <MediaKitDialog
+        videoId={video.id}
+        address={displayAddress}
+        open={mediaKitOpen}
+        onOpenChange={setMediaKitOpen}
+      />
     </Dialog>
   );
 }

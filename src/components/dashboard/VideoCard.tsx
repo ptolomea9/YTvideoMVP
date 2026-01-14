@@ -3,10 +3,11 @@
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import { useRef, useState } from 'react';
-import { Loader2, Play } from 'lucide-react';
+import { Loader2, Play, Download } from 'lucide-react';
 import { VideoWithListing, VIDEO_STATUS_CONFIG } from '@/types/video';
 import { cn } from '@/lib/utils';
 import { VideoProgressOverlay } from './VideoProgressOverlay';
+import { MediaKitDialog } from './MediaKitDialog';
 
 interface VideoCardProps {
   video: VideoWithListing;
@@ -24,6 +25,7 @@ export function VideoCard({ video, onSelect }: VideoCardProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isHovering, setIsHovering] = useState(false);
   const [isVideoLoading, setIsVideoLoading] = useState(false);
+  const [mediaKitOpen, setMediaKitOpen] = useState(false);
 
   // Format address for display
   const displayAddress = video.listing.city && video.listing.state
@@ -166,12 +168,41 @@ export function VideoCard({ video, onSelect }: VideoCardProps) {
 
         {/* Address overlay - bottom with gradient */}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 pt-12 z-10">
-          <p className="text-sm font-medium text-white truncate">{displayAddress}</p>
+          <div className="flex items-end justify-between">
+            <p className="text-sm font-medium text-white truncate flex-1 mr-2">{displayAddress}</p>
+            {/* Download button for completed videos */}
+            {canPlayVideo && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMediaKitOpen(true);
+                }}
+                className={cn(
+                  'p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors',
+                  'opacity-0 group-hover:opacity-100',
+                  'focus:outline-none focus:opacity-100'
+                )}
+                aria-label="Download video"
+              >
+                <Download className="w-4 h-4 text-white" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Hover border highlight */}
         <div className="absolute inset-0 border-2 border-transparent group-hover:border-gold/50 rounded-xl transition-colors duration-200 pointer-events-none z-10" />
       </div>
+
+      {/* Media Kit Download Dialog */}
+      {canPlayVideo && (
+        <MediaKitDialog
+          videoId={video.id}
+          address={displayAddress}
+          open={mediaKitOpen}
+          onOpenChange={setMediaKitOpen}
+        />
+      )}
     </motion.div>
   );
 }

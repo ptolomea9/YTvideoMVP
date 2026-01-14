@@ -161,7 +161,7 @@ export function MediaKitDialog({
           {/* Unbranded version */}
           <button
             onClick={() => handleDownload('unbranded')}
-            disabled={isLoading || downloadingType !== null || (downloadUrls && !hasUnbranded)}
+            disabled={isLoading || downloadingType !== null || (downloadUrls !== null && !hasUnbranded)}
             className={cn(
               'flex flex-col items-center gap-3 p-4 rounded-xl border border-border',
               'bg-background hover:bg-muted/50 transition-colors',

@@ -99,7 +99,9 @@ export async function GET(
     }
 
     // Generate descriptive filenames from address
-    const listing = video.listing as { address: string; city: string | null; state: string | null };
+    // The !inner join returns an array, so we access the first element
+    const listingData = video.listing as unknown as { address: string; city: string | null; state: string | null }[];
+    const listing = listingData[0];
     const baseFilename = sanitizeFilename(listing.address);
 
     const response: DownloadResponse = {
