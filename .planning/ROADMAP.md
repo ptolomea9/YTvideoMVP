@@ -74,7 +74,7 @@ Plans:
 
 Plans:
 - [x] 04-01: Video gallery layout with 9:16 cards ✓
-- [ ] 04-02: Hover autoplay and video player
+- [x] 04-02: Hover autoplay and video player ✓
 - [ ] 04-03: Realtime progress states during generation
 - [ ] 04-04: Media kit download (branded + unbranded)
 
@@ -111,6 +111,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Foundation | 3/3 | ✓ Complete | 2026-01-13 |
 | 2. Create Wizard | 6/6 | ✓ Complete | 2026-01-13 |
 | 3. n8n Integration | 7/7 | ✓ Complete | 2026-01-14 |
-| 4. Dashboard | 1/4 | In progress | - |
+| 4. Dashboard | 2/4 | In progress | - |
 | 5. Payments | 0/3 | Not started | - |
 | 6. Settings | 0/3 | Not started | - |
