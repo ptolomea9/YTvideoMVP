@@ -141,6 +141,79 @@ function getSectionForRoomType(roomType: RoomType): ScriptSectionType {
 }
 
 /**
+ * Video clip duration from Kling AI (seconds per image).
+ */
+const KLING_CLIP_DURATION = 5;
+
+/**
+ * Words per minute for TTS narration.
+ * Using 150 WPM for tighter, punchier narration that fits video length.
+ * This accounts for natural pauses and ensures narration ends before video.
+ */
+const TTS_WORDS_PER_MINUTE = 150;
+
+/**
+ * Maximum total words for entire script.
+ * At 150 WPM, 100 words = 40 seconds of narration.
+ * This ensures narration fits within typical video lengths.
+ */
+const MAX_TOTAL_WORDS = 100;
+
+/**
+ * Calculate word budget for each section based on image count.
+ * This ensures narration duration matches available video footage.
+ *
+ * Formula: images × 5 seconds × (120 WPM / 60) = images × 10 words
+ */
+interface SectionWordBudget {
+  type: ScriptSectionType;
+  title: string;
+  imageCount: number;
+  clipSeconds: number;
+  targetWords: number;
+}
+
+function calculateSectionWordBudgets(
+  sectionGroups: Map<ScriptSectionType, ImageInput[]>
+): SectionWordBudget[] {
+  // First pass: calculate raw budgets
+  const rawBudgets = SECTION_CONFIG.map((config) => {
+    const imagesInSection = sectionGroups.get(config.type) || [];
+    const imageCount = imagesInSection.length;
+
+    // Closing section has no images but needs ~4 seconds for CTA
+    const clipSeconds = config.type === "closing"
+      ? 4
+      : Math.max(imageCount * KLING_CLIP_DURATION, 0);
+
+    // Calculate target words: seconds × (words per minute / 60)
+    const exactWords = clipSeconds * (TTS_WORDS_PER_MINUTE / 60);
+    // Much tighter rounding - use floor and round to nearest 5
+    const targetWords = Math.floor(exactWords / 5) * 5 || 0;
+
+    return {
+      type: config.type,
+      title: config.title,
+      imageCount,
+      clipSeconds,
+      targetWords,
+    };
+  });
+
+  // Second pass: enforce hard cap by scaling down if needed
+  const totalRawWords = rawBudgets.reduce((sum, b) => sum + b.targetWords, 0);
+  if (totalRawWords > MAX_TOTAL_WORDS) {
+    const scaleFactor = MAX_TOTAL_WORDS / totalRawWords;
+    return rawBudgets.map((budget) => ({
+      ...budget,
+      targetWords: Math.floor(budget.targetWords * scaleFactor / 5) * 5 || 5,
+    }));
+  }
+
+  return rawBudgets;
+}
+
+/**
  * Input types for the API.
  */
 interface PropertyInput {
@@ -207,24 +280,35 @@ export async function POST(request: NextRequest) {
       sectionGroups.get(sectionType)!.push(image);
     }
 
-    // Build the GPT-4 prompt with order-aware, transition-rich approach
-    const prompt = buildScriptPrompt(propertyData, sortedImages);
+    // Calculate word budgets based on image counts per section
+    const wordBudgets = calculateSectionWordBudgets(sectionGroups);
 
-    // Call GPT-4
+    // Build the GPT-4 prompt with order-aware, timing-constrained approach
+    const prompt = buildScriptPrompt(propertyData, sortedImages, wordBudgets);
+
+    // Call GPT-4 with lower temperature for more concise output
     const response = await getOpenAI().chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: `You are a luxury real estate video script writer. You create compelling, cinematic narration scripts for property tour videos. Your tone is sophisticated but warm, painting vivid pictures of lifestyle and luxury. Each section should flow naturally into the next, creating a cohesive tour experience.`,
+          content: `You are a MINIMALIST luxury real estate video narrator. Write ULTRA-SHORT scripts.
+
+CRITICAL RULES:
+- MAXIMUM ${MAX_TOTAL_WORDS} words total for entire script
+- Each sentence: 5-8 words ONLY
+- NO adjective stacking (use ONE adjective max)
+- NO filler phrases ("you'll find", "featuring", "boasting")
+- SHORT fragments are better than full sentences
+- Think: luxury magazine headlines, not paragraphs`,
         },
         {
           role: "user",
           content: prompt,
         },
       ],
-      max_tokens: 2000,
-      temperature: 0.7, // Creative but consistent
+      max_tokens: 500, // Very reduced to force brevity
+      temperature: 0.3, // Lower for more concise, predictable output
     });
 
     const content = response.choices[0]?.message?.content;
@@ -278,11 +362,13 @@ export async function POST(request: NextRequest) {
 
 /**
  * Build the prompt for GPT-4 script generation.
- * Uses user's image order and detects transitions between room types.
+ * Uses user's image order, detects transitions, and constrains word counts
+ * to match available video footage duration.
  */
 function buildScriptPrompt(
   property: PropertyInput,
-  sortedImages: ImageInput[]
+  sortedImages: ImageInput[],
+  wordBudgets: SectionWordBudget[]
 ): string {
   const formatPrice = (price: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(price);
@@ -331,49 +417,54 @@ function buildScriptPrompt(
           .join("\n")
       : "- No major transitions needed - images flow naturally within similar spaces";
 
-  return `Create a cinematic video narration script for this property tour.
+  // Build dynamic script structure based on word budgets
+  const scriptStructure = wordBudgets
+    .map((budget) => {
+      if (budget.imageCount === 0 && budget.type !== "closing") {
+        return `- ${budget.title} (10-15 words): Brief transition only (no images in this section)`;
+      }
+      const description = budget.type === "closing"
+        ? "Final CTA with property address"
+        : `${budget.imageCount} image${budget.imageCount !== 1 ? "s" : ""} = ${budget.clipSeconds}s of footage`;
+      return `- ${budget.title} (~${budget.targetWords} words): ${description}`;
+    })
+    .join("\n");
 
-**PROPERTY DETAILS:**
-- Address: ${property.address}, ${property.city}, ${property.state}
-- Type: ${property.propertyType}
-- Price: ${formatPrice(property.price)}
-- Specs: ${property.beds} beds | ${property.baths} baths | ${property.sqft.toLocaleString()} sq ft
-- Description: ${property.description || "Luxury property"}
+  // Calculate total expected duration
+  const totalWords = wordBudgets.reduce((sum, b) => sum + b.targetWords, 0);
+  const totalSeconds = wordBudgets.reduce((sum, b) => sum + b.clipSeconds, 0);
+
+  // Hard cap the total words
+  const cappedTotalWords = Math.min(totalWords, MAX_TOTAL_WORDS);
+
+  return `ULTRA-SHORT narration for property video. MAXIMUM ${cappedTotalWords} WORDS TOTAL.
+
+**PROPERTY:** ${property.address}, ${property.city} | ${formatPrice(property.price)} | ${property.beds}bd/${property.baths}ba
 ${neighborhoodPOIs}${agentContact}
 
-**IMAGE SEQUENCE (in exact order to narrate):**
+**IMAGES:** ${sortedImages.length} total
 ${imageSequence}
 
-**CRITICAL REQUIREMENTS:**
-1. **FOLLOW THE EXACT IMAGE ORDER** - The user has arranged these images intentionally. Narrate them in this sequence.
-2. **SMOOTH TRANSITIONS** - When room types change between images, use natural transition phrases (hints provided above).
-3. **REFERENCE EACH IMAGE** - Mention the label and key features of each image as you narrate.
-4. **COHESIVE FLOW** - Despite section breaks, the narrative should feel like one continuous tour.
+**⚠️ HARD WORD LIMITS (DO NOT EXCEED):**
+TOTAL: ${cappedTotalWords} words maximum
+${scriptStructure}
 
-**TRANSITION GUIDELINES:**
-${transitionGuidelines}
+**STYLE:**
+- 5-8 word sentences ONLY
+- One adjective per noun MAX
+- Fragments OK: "Stunning views." "Chef's kitchen."
+- NO: "You'll love the..." "Featuring..." "Boasting..."
 
-**SCRIPT STRUCTURE:**
-- Opening (40-60 words): Hook with exterior/first images
-- Outdoor (40-60 words): If outdoor images exist, describe them (can be empty if no outdoor images)
-- Living Spaces (40-60 words): Interior main living areas
-- Private Retreat (40-60 words): Bedrooms, bathrooms, private spaces
-- Closing (40-60 words): Final CTA with property address
-
-**IMPORTANT:** Write sections based on where images appear in the sequence. If the user has reordered images so that a bedroom appears early, the bedroom content goes in the section where it naturally fits based on the image order.
-
-**OUTPUT FORMAT:**
-Return JSON with "sections" array. Each section should contain narration for its relevant images IN THE ORDER they appear in the sequence above:
-
+**OUTPUT (JSON only):**
 {
   "sections": [
-    {"type": "opening", "content": "...narration for exterior/first images..."},
-    {"type": "outdoor", "content": "...narration for outdoor images, or brief transition if none..."},
-    {"type": "living", "content": "...narration for living area images..."},
-    {"type": "private", "content": "...narration for private space images..."},
-    {"type": "closing", "content": "...CTA with property address..."}
+    {"type": "opening", "content": "[${wordBudgets.find(b => b.type === "opening")?.targetWords || 10} words MAX]"},
+    {"type": "outdoor", "content": "[${wordBudgets.find(b => b.type === "outdoor")?.targetWords || 5} words MAX]"},
+    {"type": "living", "content": "[${wordBudgets.find(b => b.type === "living")?.targetWords || 10} words MAX]"},
+    {"type": "private", "content": "[${wordBudgets.find(b => b.type === "private")?.targetWords || 10} words MAX]"},
+    {"type": "closing", "content": "[${wordBudgets.find(b => b.type === "closing")?.targetWords || 10} words MAX]"}
   ]
 }
 
-If a section has no images, write a brief (10-15 word) transitional sentence that maintains flow.`;
+Empty sections: "Moving on..." (3 words max).`;
 }
