@@ -458,3 +458,58 @@ if (audioSpeedMultiplier !== 1.0) {
 - [ ] Console shows overrun calculation and adjustment type
 - [ ] Audio sounds natural (no perceptible speed change for ≤8%)
 - [ ] Section-to-image pacing preserved (natural pauses between sections)
+
+### 2025-01-16: Fix json2video API Rejection - Invalid Payload Field
+
+**Problem**: Execution 8778 failed at `Get video status` node with error:
+```
+Error: Project ID must be a 16-character string. Received ID: '' (length: 0)
+```
+
+**Root Cause**: The `prepare body for jsontovideo to set video` node was adding an `_adjustmentInfo` object to the json2video API payload:
+
+```javascript
+const payload = {
+  width: 1080,
+  height: 1920,
+  quality: 'high',
+  resolution: 'custom',
+  scenes: [...],
+  _adjustmentInfo: { ... }  // ← Invalid field - not part of json2video schema
+};
+```
+
+Json2video API rejected this payload due to the unexpected field, returning an error response without a `project` field. The `Get video status` node then failed because it couldn't access the project ID.
+
+**n8n Workflow Fix** (workflow ID: `Qo2sirL0cDI2fVNQMJ5Eq`):
+
+**`prepare body for jsontovideo to set video`** node:
+- Removed `_adjustmentInfo` from the payload object
+- Adjustment info was already being logged to console (no data loss)
+- Verified no downstream nodes depend on `_adjustmentInfo`
+
+**Before (broken)**:
+```javascript
+const payload = {
+  width: 1080,
+  height: 1920,
+  scenes: [...],
+  _adjustmentInfo: { applied, audioSpeedMultiplier, ... }
+};
+```
+
+**After (fixed)**:
+```javascript
+// Payload for json2video API - no custom fields allowed
+const payload = {
+  width: 1080,
+  height: 1920,
+  scenes: [...]
+};
+// Adjustment info logged to console for debugging
+```
+
+**Verification**:
+- [ ] `Call Jsontovideo to create task` returns valid project ID
+- [ ] `Get video status` successfully polls status
+- [ ] Console logs still show adjustment info for debugging

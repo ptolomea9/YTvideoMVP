@@ -4,10 +4,13 @@ import { useState, useCallback, KeyboardEvent, useImperativeHandle, forwardRef, 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { X, Upload, Loader2 } from "lucide-react";
+import { X, Upload, Loader2, Plus } from "lucide-react";
 import Image from "next/image";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ImageCropModal } from "@/components/ui/image-crop-modal";
+import { readFileAsDataUrl } from "@/lib/image-crop";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -133,6 +136,10 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
     const logoInputRef = useRef<HTMLInputElement>(null);
     const photoInputRef = useRef<HTMLInputElement>(null);
 
+    // Crop modal state
+    const [cropModalOpen, setCropModalOpen] = useState(false);
+    const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+
     // Load saved branding from user profile on mount
     useEffect(() => {
       async function loadSavedBranding() {
@@ -206,13 +213,40 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
 
     /**
      * Handle file input change for branding images.
+     * For headshots, opens crop modal first. Logos upload directly.
      */
     const handleFileChange = useCallback(
-      (e: ChangeEvent<HTMLInputElement>, type: "logo" | "photo") => {
+      async (e: ChangeEvent<HTMLInputElement>, type: "logo" | "photo") => {
         const file = e.target.files?.[0];
-        if (file) {
+        if (!file) return;
+
+        if (type === "photo") {
+          // For headshots, open crop modal first
+          const dataUrl = await readFileAsDataUrl(file);
+          setImageToCrop(dataUrl);
+          setCropModalOpen(true);
+        } else {
+          // Logos upload directly without cropping
           handleBrandingUpload(file, type);
         }
+
+        // Reset file input so same file can be selected again
+        e.target.value = "";
+      },
+      [handleBrandingUpload]
+    );
+
+    /**
+     * Handle cropped image from crop modal.
+     * Converts blob to File and uploads to Supabase.
+     */
+    const handleCropComplete = useCallback(
+      async (croppedBlob: Blob) => {
+        const file = new File([croppedBlob], "headshot.png", {
+          type: "image/png",
+        });
+        await handleBrandingUpload(file, "photo");
+        setImageToCrop(null);
       },
       [handleBrandingUpload]
     );
@@ -235,20 +269,27 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
     );
 
     /**
+     * Add a POI to the list (used by button click and Enter key).
+     */
+    const handleAddPoi = useCallback(() => {
+      const value = poiInput.trim();
+      if (value && pois.length < 10 && !pois.includes(value)) {
+        setPois([...pois, value]);
+        setPoiInput("");
+      }
+    }, [poiInput, pois]);
+
+    /**
      * Handle POI input - add on Enter.
      */
     const handlePoiKeyDown = useCallback(
       (e: KeyboardEvent<HTMLInputElement>) => {
         if (e.key === "Enter") {
           e.preventDefault();
-          const value = poiInput.trim();
-          if (value && pois.length < 10 && !pois.includes(value)) {
-            setPois([...pois, value]);
-            setPoiInput("");
-          }
+          handleAddPoi();
         }
       },
-      [poiInput, pois]
+      [handleAddPoi]
     );
 
     /**
@@ -692,17 +733,29 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
           <div className="space-y-3">
             <div className="space-y-2">
               <Label htmlFor="poiInput">Add POI</Label>
-              <Input
-                id="poiInput"
-                value={poiInput}
-                onChange={(e) => setPoiInput(e.target.value)}
-                onKeyDown={handlePoiKeyDown}
-                placeholder="Whole Foods, Central Park, Metro Station..."
-                className="focus-visible:ring-primary/50"
-                disabled={pois.length >= 10}
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="poiInput"
+                  value={poiInput}
+                  onChange={(e) => setPoiInput(e.target.value)}
+                  onKeyDown={handlePoiKeyDown}
+                  placeholder="Whole Foods, Central Park, Metro Station..."
+                  className="focus-visible:ring-primary/50 flex-1"
+                  disabled={pois.length >= 10}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={handleAddPoi}
+                  disabled={!poiInput.trim() || pois.length >= 10}
+                  title="Add POI"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
               <p className="text-xs text-muted-foreground">
-                Press Enter to add • {pois.length}/10 added
+                {pois.length}/10 added
               </p>
             </div>
 
@@ -729,6 +782,23 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
             )}
           </div>
         </div>
+
+        {/* Headshot Crop Modal */}
+        {imageToCrop && (
+          <ImageCropModal
+            isOpen={cropModalOpen}
+            onClose={() => {
+              setCropModalOpen(false);
+              setImageToCrop(null);
+            }}
+            imageSrc={imageToCrop}
+            onCropComplete={handleCropComplete}
+            aspectRatio={1}
+            cropShape="round"
+            title="Crop Headshot"
+            description="Adjust the crop to frame your face for the video end card"
+          />
+        )}
       </div>
     );
   }

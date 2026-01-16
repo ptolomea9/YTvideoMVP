@@ -93,6 +93,33 @@ const TRANSITION_HINTS: Record<string, Record<string, string>> = {
 };
 
 /**
+ * US state abbreviations to full names.
+ * Used to ensure TTS reads state names correctly (e.g., "FL" → "Florida").
+ */
+const US_STATE_NAMES: Record<string, string> = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri",
+  MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
+  NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio",
+  OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont",
+  VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
+  DC: "Washington D.C.", PR: "Puerto Rico", VI: "Virgin Islands", GU: "Guam",
+};
+
+/**
+ * Convert state abbreviation to full name for TTS pronunciation.
+ * If already a full name or not recognized, returns as-is.
+ */
+function getStateName(state: string): string {
+  const normalized = state.trim().toUpperCase();
+  return US_STATE_NAMES[normalized] || state;
+}
+
+/**
  * Transition point between images.
  */
 interface TransitionPoint {
@@ -486,7 +513,7 @@ function buildScriptPrompt(
   return `Create an engaging narration for a ${videoDuration}-second luxury property video. STRICT LIMIT: ${cappedTotalWords} words maximum.
 
 **PROPERTY:**
-${property.address}, ${property.city}, ${property.state}
+${property.address}, ${property.city}, ${getStateName(property.state)}
 ${formatPrice(property.price)} | ${property.beds} bed, ${property.baths} bath | ${property.sqft.toLocaleString()} sq ft
 ${property.description ? `Description: ${property.description}` : ""}
 ${neighborhoodPOIs}${agentContact}
