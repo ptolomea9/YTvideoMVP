@@ -10,6 +10,9 @@ interface BrandingProfile {
   agent_name?: string;
   agent_phone?: string;
   agent_email?: string;
+  agent_social?: string;
+  agent_cta?: string;
+  brand_name?: string;
 }
 
 /**
@@ -43,6 +46,9 @@ export async function GET() {
       agent_name: branding.agent_name || null,
       agent_phone: branding.agent_phone || null,
       agent_email: branding.agent_email || null,
+      agent_social: branding.agent_social || null,
+      agent_cta: branding.agent_cta || null,
+      brand_name: branding.brand_name || null,
     });
   } catch (error) {
     console.error("Error fetching branding profile:", error);
@@ -76,7 +82,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { headshot_url, logo_url, agent_name, agent_phone, agent_email } = body;
+    const { headshot_url, logo_url, agent_name, agent_phone, agent_email, agent_social, agent_cta, brand_name } = body;
 
     // Merge with existing branding data
     const existingBranding = (user.user_metadata?.branding as BrandingProfile) || {};
@@ -90,6 +96,9 @@ export async function POST(request: NextRequest) {
     if (agent_name !== undefined) updatedBranding.agent_name = agent_name;
     if (agent_phone !== undefined) updatedBranding.agent_phone = agent_phone;
     if (agent_email !== undefined) updatedBranding.agent_email = agent_email;
+    if (agent_social !== undefined) updatedBranding.agent_social = agent_social;
+    if (agent_cta !== undefined) updatedBranding.agent_cta = agent_cta;
+    if (brand_name !== undefined) updatedBranding.brand_name = brand_name;
 
     // Update user metadata
     const { error: updateError } = await supabase.auth.updateUser({

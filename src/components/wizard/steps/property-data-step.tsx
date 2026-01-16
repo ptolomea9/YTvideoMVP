@@ -162,6 +162,12 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
             if (data.agent_email && !state.propertyData.agentEmail) {
               setValue("agentEmail", data.agent_email);
             }
+            if (data.agent_social && !state.propertyData.agentSocial) {
+              setValue("agentSocial", data.agent_social);
+            }
+            if (data.agent_cta && !state.propertyData.agentCta) {
+              setValue("agentCta", data.agent_cta);
+            }
           }
         } catch (error) {
           console.error("Error loading saved branding:", error);
@@ -250,10 +256,10 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
     );
 
     /**
-     * Handle form submission - save to wizard context.
+     * Handle form submission - save to wizard context and persist agent info.
      */
     const onSubmit = useCallback(
-      (data: PropertyFormData) => {
+      async (data: PropertyFormData) => {
         const propertyData: Partial<PropertyData> = {
           ...data,
           features: pois,
@@ -261,6 +267,20 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
           agentPhotoUrl,
         };
         setPropertyData(propertyData);
+
+        // Persist agent info for future listings (fire and forget)
+        fetch("/api/branding/profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            agent_name: data.agentName,
+            agent_phone: data.agentPhone,
+            agent_email: data.agentEmail,
+            agent_social: data.agentSocial,
+            agent_cta: data.agentCta,
+          }),
+        }).catch((err) => console.error("Failed to save agent info:", err));
+
         return true;
       },
       [pois, agentLogoUrl, agentPhotoUrl, setPropertyData]
