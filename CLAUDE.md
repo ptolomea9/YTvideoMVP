@@ -513,3 +513,52 @@ const payload = {
 - [ ] `Call Jsontovideo to create task` returns valid project ID
 - [ ] `Get video status` successfully polls status
 - [ ] Console logs still show adjustment info for debugging
+
+### 2025-01-16: Fix End Card Text Not Rendering & Square Headshot
+
+**Problems**:
+1. End card text (agent_name, phone, email) not rendering - only brand_name partially visible
+2. Headshot still square instead of circular
+
+**Root Causes** (verified via json2video API docs):
+1. **Text `color` property invalid**: json2video requires `font-color` inside the `settings` object, not `color`
+2. **Circular mask requires PNG URL**: The `mask` property needs a URL to a PNG file (white circle on black background), not a string value like `"circle"`
+
+**n8n Workflow Fixes** (workflow ID: `Qo2sirL0cDI2fVNQMJ5Eq`):
+
+**`json2video - Edit video1`** node:
+
+1. **Text color property fix** (4 occurrences):
+   - Changed `"color": "#1A1A1A"` → `"font-color": "#1A1A1A"` (agent_name)
+   - Changed `"color": "#666666"` → `"font-color": "#666666"` (brand_name, email)
+   - Changed `"color": "#333333"` → `"font-color": "#333333"` (phone)
+
+2. **Circular headshot mask**:
+   - Created 300x300 circle mask PNG (white circle on black background) using `scripts/create-circle-mask.js`
+   - Uploaded to Supabase storage: `listing-images/assets/circle-mask.png`
+   - Added `mask` property to headshot image element:
+   ```json
+   {
+     "type": "image",
+     "src": "{{ $json.headshot_url }}",
+     "position": "custom",
+     "width": 300,
+     "height": 300,
+     "fade-in": 0.5,
+     "mask": "https://qjkgsiqcqkkuhawuqvve.supabase.co/storage/v1/object/public/listing-images/assets/circle-mask.png"
+   }
+   ```
+
+**New Scripts Added**:
+- `scripts/create-circle-mask.js` - Generates 300x300 circle mask PNG using sharp
+- `scripts/upload-circle-mask.js` - Uploads mask to Supabase storage
+
+**Circle Mask URL**: `https://qjkgsiqcqkkuhawuqvve.supabase.co/storage/v1/object/public/listing-images/assets/circle-mask.png`
+
+**Verification**:
+- [ ] Agent name text visible on end card (dark gray #1A1A1A)
+- [ ] Brand name text visible (gray #666666)
+- [ ] Phone number visible (dark gray #333333)
+- [ ] Email visible (gray #666666)
+- [ ] Headshot appears as circle, not square
+- [ ] No json2video API errors
