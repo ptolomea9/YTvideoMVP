@@ -89,9 +89,8 @@ export interface PropertyDataStepHandle {
 export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
   function PropertyDataStep(_props, ref) {
     const { state, setPropertyData } = useWizard();
-    // TODO: Remove test defaults before production
     const [pois, setPois] = useState<string[]>(
-      state.propertyData.features?.length ? state.propertyData.features : ["Rodeo Drive", "Beverly Hills Hotel", "Greystone Mansion"]
+      state.propertyData.features || []
     );
     const [poiInput, setPoiInput] = useState("");
 
@@ -105,24 +104,23 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
     } = useForm<PropertyFormData>({
       resolver: zodResolver(propertyDataSchema),
       mode: "onChange",
-      // TODO: Remove test defaults before production
       defaultValues: {
-        address: state.propertyData.address || "123 Luxury Lane",
-        city: state.propertyData.city || "Beverly Hills",
-        state: state.propertyData.state || "CA",
-        zipCode: state.propertyData.zipCode || "90210",
+        address: state.propertyData.address || "",
+        city: state.propertyData.city || "",
+        state: state.propertyData.state || "",
+        zipCode: state.propertyData.zipCode || "",
         propertyType: state.propertyData.propertyType || "single_family",
-        bedrooms: state.propertyData.bedrooms || 4,
-        bathrooms: state.propertyData.bathrooms || 3,
-        squareFeet: state.propertyData.squareFeet || 3500,
-        lotSize: state.propertyData.lotSize || 0.5,
+        bedrooms: state.propertyData.bedrooms || undefined,
+        bathrooms: state.propertyData.bathrooms || undefined,
+        squareFeet: state.propertyData.squareFeet || undefined,
+        lotSize: state.propertyData.lotSize || undefined,
         lotSizeUnit: state.propertyData.lotSizeUnit || "acres",
-        listingPrice: state.propertyData.listingPrice || 2500000,
-        description: state.propertyData.description || "Stunning modern estate with panoramic city views, chef's kitchen, and resort-style pool.",
-        agentName: state.propertyData.agentName || "Jane Smith",
-        agentPhone: state.propertyData.agentPhone || "(310) 555-0123",
-        agentEmail: state.propertyData.agentEmail || "jane@luxuryrealty.com",
-        agentSocial: state.propertyData.agentSocial || "@luxuryhomes",
+        listingPrice: state.propertyData.listingPrice || undefined,
+        description: state.propertyData.description || "",
+        agentName: state.propertyData.agentName || "",
+        agentPhone: state.propertyData.agentPhone || "",
+        agentEmail: state.propertyData.agentEmail || "",
+        agentSocial: state.propertyData.agentSocial || "",
         agentCta: state.propertyData.agentCta || "Schedule a Private Tour",
       },
     });
