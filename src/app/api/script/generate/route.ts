@@ -147,17 +147,22 @@ const KLING_CLIP_DURATION = 5;
 
 /**
  * Words per minute for TTS narration.
- * Using 130 WPM for a natural, engaging pace.
- * Audio timing is now handled by sectionImageMapping in n8n workflow.
+ * Using 120 WPM (conservative) to account for slower voices.
+ * Some voices speak at ~128 WPM, so this prevents narration overrun.
  */
-const TTS_WORDS_PER_MINUTE = 130;
+const TTS_WORDS_PER_MINUTE = 120;
 
 /**
- * Maximum total words for entire script.
- * At 130 WPM, 250 words ≈ 115 seconds of narration.
- * This allows rich, descriptive content for luxury properties.
+ * Seconds reserved for end card (agent branding overlay).
+ * Narration should finish before this to avoid being cut off.
  */
-const MAX_TOTAL_WORDS = 250;
+const END_CARD_SECONDS = 8;
+
+/**
+ * Default maximum total words for entire script.
+ * This is overridden dynamically based on video duration in the POST handler.
+ */
+const DEFAULT_MAX_TOTAL_WORDS = 150;
 
 /**
  * Calculate word budget for each section based on image count.
@@ -174,7 +179,8 @@ interface SectionWordBudget {
 }
 
 function calculateSectionWordBudgets(
-  sectionGroups: Map<ScriptSectionType, ImageInput[]>
+  sectionGroups: Map<ScriptSectionType, ImageInput[]>,
+  maxTotalWords: number
 ): SectionWordBudget[] {
   // First pass: calculate raw budgets
   const rawBudgets = SECTION_CONFIG.map((config) => {
@@ -205,8 +211,8 @@ function calculateSectionWordBudgets(
 
   // Second pass: enforce hard cap by scaling down if needed
   const totalRawWords = rawBudgets.reduce((sum, b) => sum + b.targetWords, 0);
-  if (totalRawWords > MAX_TOTAL_WORDS) {
-    const scaleFactor = MAX_TOTAL_WORDS / totalRawWords;
+  if (totalRawWords > maxTotalWords) {
+    const scaleFactor = maxTotalWords / totalRawWords;
     return rawBudgets.map((budget) => ({
       ...budget,
       targetWords: Math.max(Math.round(budget.targetWords * scaleFactor / 5) * 5, 10),
@@ -283,13 +289,27 @@ export async function POST(request: NextRequest) {
       sectionGroups.get(sectionType)!.push(image);
     }
 
+    // Calculate video duration and dynamic word budget
+    // Formula: (videoDuration - END_CARD_SECONDS) × (WPM / 60)
+    const videoDuration = sortedImages.length * KLING_CLIP_DURATION;
+    const availableNarrationTime = videoDuration - END_CARD_SECONDS;
+    const calculatedMaxWords = Math.floor(availableNarrationTime * (TTS_WORDS_PER_MINUTE / 60));
+    // Cap at DEFAULT_MAX_TOTAL_WORDS to prevent excessively long scripts
+    const maxTotalWords = Math.min(DEFAULT_MAX_TOTAL_WORDS, Math.max(calculatedMaxWords, 60));
+
+    console.log(`Script generation: ${sortedImages.length} images × ${KLING_CLIP_DURATION}s = ${videoDuration}s video`);
+    console.log(`Narration time: ${availableNarrationTime}s (${END_CARD_SECONDS}s reserved for end card)`);
+    console.log(`Max words: ${maxTotalWords} (calculated: ${calculatedMaxWords}, cap: ${DEFAULT_MAX_TOTAL_WORDS})`);
+
     // Calculate word budgets based on image counts per section
-    const wordBudgets = calculateSectionWordBudgets(sectionGroups);
+    const wordBudgets = calculateSectionWordBudgets(sectionGroups, maxTotalWords);
 
     // Build the GPT-4 prompt with order-aware, timing-constrained approach
-    const prompt = buildScriptPrompt(propertyData, sortedImages, wordBudgets);
+    const prompt = buildScriptPrompt(propertyData, sortedImages, wordBudgets, maxTotalWords, videoDuration);
 
-    // Call GPT-4 for rich, engaging narration
+    // Call GPT-4 for narration
+    // Lower temperature (0.4) for more consistent word counts
+    // Lower max_tokens (800) since scripts are now constrained to ~150 words
     const response = await getOpenAI().chat.completions.create({
       model: "gpt-4o",
       messages: [
@@ -297,33 +317,32 @@ export async function POST(request: NextRequest) {
           role: "system",
           content: `You are a luxury real estate video narrator creating compelling, descriptive scripts.
 
-CRITICAL REQUIREMENTS:
-- EVERY section MUST have at least 50 characters (approximately 8-12 words minimum)
-- Opening section: Set an evocative scene, mention the location/neighborhood
-- Closing section: Strong call-to-action with the full property address
-- Stay under ${MAX_TOTAL_WORDS} words total
+CRITICAL TIMING CONSTRAINT:
+- This is a ${videoDuration}-second video with ${END_CARD_SECONDS}s reserved for the end card
+- Total narration MUST be under ${maxTotalWords} words (approximately ${Math.floor(maxTotalWords / 2)} words per minute at 120 WPM)
+- Going over the word limit will cause narration to be cut off!
 
-STYLE GUIDELINES:
-- Write evocative, sensory-rich descriptions that paint a picture
-- Vary sentence length for rhythm: mix short punchy lines with flowing descriptions
-- Use vivid language that conveys lifestyle and emotion
-- Highlight architectural details, materials, and craftsmanship
-- Create a narrative arc that builds desire throughout the tour
+SECTION REQUIREMENTS:
+- EVERY section MUST have at least 40 characters
+- Each sentence should be 5-10 words maximum
+- Opening: Set the scene with location (15-25 words)
+- Closing: Call-to-action with address (15-20 words)
 
-AVOID:
-- Generic phrases like "boasting", "featuring", "you'll love"
-- Repetitive sentence structures
-- Over-the-top superlatives without substance
-- Listing features without context
-- Sections shorter than 50 characters`,
+STYLE:
+- Evocative but concise descriptions
+- Short, punchy sentences
+- No filler phrases ("boasting", "featuring", "you'll love")
+- Focus on what makes this property unique
+
+OUTPUT: JSON only with sections array`,
         },
         {
           role: "user",
           content: prompt,
         },
       ],
-      max_tokens: 1500, // Allow for richer content
-      temperature: 0.7, // Higher for more creative, engaging output
+      max_tokens: 800,
+      temperature: 0.4,
     });
 
     const content = response.choices[0]?.message?.content;
@@ -340,6 +359,21 @@ AVOID:
     const generated = JSON.parse(jsonStr) as {
       sections: { type: ScriptSectionType; content: string }[];
     };
+
+    // Validate word count - warn if over budget
+    const totalGeneratedWords = generated.sections.reduce(
+      (sum, s) => sum + (s.content?.split(/\s+/).filter(w => w.length > 0).length || 0),
+      0
+    );
+    const estimatedDuration = Math.round(totalGeneratedWords / (TTS_WORDS_PER_MINUTE / 60));
+
+    console.log(`Script generated: ${totalGeneratedWords} words (limit: ${maxTotalWords})`);
+    console.log(`Estimated narration duration: ${estimatedDuration}s (available: ${videoDuration - END_CARD_SECONDS}s)`);
+
+    if (totalGeneratedWords > maxTotalWords * 1.1) {
+      console.warn(`⚠️ Script over budget by ${Math.round((totalGeneratedWords / maxTotalWords - 1) * 100)}%`);
+      console.warn(`This may cause narration to be cut off at the end of the video`);
+    }
 
     // Build the response sections with metadata
     const sections: GeneratedSection[] = SECTION_CONFIG.map((config, index) => {
@@ -383,7 +417,9 @@ AVOID:
 function buildScriptPrompt(
   property: PropertyInput,
   sortedImages: ImageInput[],
-  wordBudgets: SectionWordBudget[]
+  wordBudgets: SectionWordBudget[],
+  maxTotalWords: number,
+  videoDuration: number
 ): string {
   const formatPrice = (price: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(price);
@@ -449,10 +485,10 @@ function buildScriptPrompt(
   const totalWords = wordBudgets.reduce((sum, b) => sum + b.targetWords, 0);
   const totalSeconds = wordBudgets.reduce((sum, b) => sum + b.clipSeconds, 0);
 
-  // Hard cap the total words
-  const cappedTotalWords = Math.min(totalWords, MAX_TOTAL_WORDS);
+  // Use the passed-in maxTotalWords (already capped)
+  const cappedTotalWords = Math.min(totalWords, maxTotalWords);
 
-  return `Create an engaging narration for a luxury property video tour. Target: ~${cappedTotalWords} words total.
+  return `Create an engaging narration for a ${videoDuration}-second luxury property video. STRICT LIMIT: ${cappedTotalWords} words maximum.
 
 **PROPERTY:**
 ${property.address}, ${property.city}, ${property.state}
