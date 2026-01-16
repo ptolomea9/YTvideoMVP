@@ -132,3 +132,29 @@ N8N_WEBHOOK_URL=
    - Music ducking now correctly quiets during narration segments
 
 **Verification**: Check console logs for "Section order (frontend)" and matching `Starts`/`Durations` arrays.
+
+### 2025-01-16: Narration Starts 25 Seconds Late Fix
+
+**Problem**: Opening narration ("Welcome to Beverly Hills...") started at 25 seconds instead of at 2 seconds. Two root causes:
+
+1. **Frontend**: Opening section only matched "exterior" room type - if first images were tagged "outdoor", opening got a later image (index 5+)
+2. **n8n**: Narration start time was calculated from image indices, so opening with image index 5 would start at 5×5=25s
+
+**Frontend Fix** (`src/lib/n8n/transform.ts`):
+- `mapImagesToSections()` now always assigns first 2 images to opening section
+- This ensures opening describes what the viewer sees first, regardless of room type classification
+
+**n8n Workflow Fix** (`prepare body for jsontovideo to set video` node):
+- Opening narration always starts at 2s (INTRO_SILENCE)
+- Middle sections (outdoor, living, private) sorted by first image index
+- Closing section always placed at video end
+- Console logs now show: `Strategy: Opening first, middle sorted by image index, closing last`
+
+**Expected behavior after fix**:
+| Section | Start Time | Notes |
+|---------|------------|-------|
+| opening | 2s | Always first, describes first images |
+| outdoor/living/private | ~sorted by image | After opening ends |
+| closing | near video end | Always last |
+
+**Verification**: Console should show `Section "opening": start=2s`

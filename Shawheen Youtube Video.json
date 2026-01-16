@@ -1,11 +1,5 @@
 {
-  "updatedAt": "2026-01-16T07:34:01.415Z",
-  "createdAt": "2026-01-13T23:28:53.820Z",
-  "id": "Qo2sirL0cDI2fVNQMJ5Eq",
   "name": "Shawheen Youtube Video",
-  "description": null,
-  "active": true,
-  "isArchived": false,
   "nodes": [
     {
       "parameters": {
@@ -729,7 +723,6 @@
         "method": "POST",
         "url": "https://api.kie.ai/api/v1/jobs/createTask",
         "sendHeaders": true,
-        "specifyHeaders": "keypair",
         "headerParameters": {
           "parameters": [
             {
@@ -743,7 +736,6 @@
           ]
         },
         "sendBody": true,
-        "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={\n  \"model\": \"kling-2.6/image-to-video\",\n  \"input\": {\n    \"image_urls\": [\"{{ $json.imageurl }}\"],\n    \"prompt\": \"{{ $json.prompt }}\",\n    \"negative_prompt\": \"{{ $json.negative_prompt }}\",\n    \"duration\": \"5\",\n    \"sound\": false\n  }\n}",
         "options": {}
@@ -755,13 +747,7 @@
         29648
       ],
       "id": "0ef87ce6-24c6-4152-9f75-811da7fd2849",
-      "name": "Call Kie Api Kling Model to Generate image to video",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "T1nfcHN1C0bAAIpR",
-          "name": "Kie.ai"
-        }
-      }
+      "name": "Call Kie Api Kling Model to Generate image to video"
     },
     {
       "parameters": {
@@ -1089,7 +1075,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// ============================================================\n// prepare body for jsontovideo to set video\n// Adds narration audio to merged video clips\n// FIXED: Uses sectionImageMapping for sync - audio plays when its images appear\n// ============================================================\n\nconst movieData = $input.first().json.movie;\n\n// VALIDATION: Ensure we have valid movie data\nif (!movieData) {\n  throw new Error('PIPELINE ERROR: No movie data from merged video.');\n}\nif (!movieData.url) {\n  throw new Error('PIPELINE ERROR: movie.url is undefined. Merged video may have failed. Status: ' + (movieData.status || 'unknown'));\n}\nif (movieData.duration === undefined || movieData.duration === null) {\n  throw new Error('PIPELINE ERROR: movie.duration is undefined. Cannot calculate narration timing.');\n}\n\nconst videoUrl = movieData.url;\nconst videoDuration = Number(movieData.duration);\n\n// VALIDATION: Ensure videoDuration is a valid positive number\nif (isNaN(videoDuration) || videoDuration <= 0) {\n  throw new Error('PIPELINE ERROR: Invalid videoDuration: ' + movieData.duration + '. Must be a positive number.');\n}\n\n// Get audio items\nconst audioItems = $('Get duration of voices').all();\n\nif (!audioItems || audioItems.length === 0) {\n  throw new Error('PIPELINE ERROR: No audio items from Get duration of voices.');\n}\n\nconst audioClips = audioItems.map((a, idx) => {\n  const url = a.json.data?.url;\n  const duration = Number(a.json.data?.duration);\n  if (!url) {\n    throw new Error(`PIPELINE ERROR: Audio clip ${idx} has no URL.`);\n  }\n  if (isNaN(duration) || duration <= 0) {\n    throw new Error(`PIPELINE ERROR: Audio clip ${idx} has invalid duration: ${a.json.data?.duration}`);\n  }\n  return { url, duration };\n});\n\n// ----------------------\n// SECTION-AWARE TIMING\n// ----------------------\nconst CLIP_DURATION = 5; // Each Kling clip = 5 seconds\n\n// Get section-to-image mapping from webhook\nconst webhookData = $('Webhook').first().json.body;\nlet sectionMapping = [];\n\n// Handle both array and single object formats\nif (Array.isArray(webhookData) && webhookData[0]?.sectionImageMapping) {\n  sectionMapping = webhookData[0].sectionImageMapping;\n} else if (webhookData?.sectionImageMapping) {\n  sectionMapping = webhookData.sectionImageMapping;\n}\n\nconsole.log('Section mapping from webhook:', JSON.stringify(sectionMapping, null, 2));\nconsole.log('Audio clips count:', audioClips.length);\nconsole.log('Video duration:', videoDuration, 's');\n\nlet timeline = [];\n\nif (sectionMapping && sectionMapping.length > 0) {\n  // CASE 1: Use section mapping for sync\n  console.log('Strategy: Section-aware timing - audio syncs with image appearance');\n  \n  // Section order from frontend: [opening, outdoor, living, private, closing]\n  // But sectionMapping may have different order based on image assignments\n  \n  for (let i = 0; i < audioClips.length; i++) {\n    const section = sectionMapping[i];\n    const clip = audioClips[i];\n    \n    if (!section || !section.imageIndices || section.imageIndices.length === 0) {\n      // If no section mapping, place after previous clip\n      const lastEnd = timeline.length > 0 \n        ? timeline[timeline.length - 1].start + audioClips[i - 1].duration \n        : 0;\n      console.log(`Section ${i} (${section?.section || 'unknown'}): No image mapping, placing at ${lastEnd}s`);\n      timeline.push({\n        type: 'audio',\n        src: clip.url,\n        start: parseFloat(lastEnd.toFixed(3)),\n        loop: 0,\n        volume: 2\n      });\n      continue;\n    }\n    \n    // Find earliest image in this section\n    const firstImageIndex = Math.min(...section.imageIndices);\n    \n    // Narration starts when its first image appears\n    // Special handling for 'closing' section - place at end of video\n    let sectionStart;\n    if (section.section === 'closing') {\n      // Closing should start near end, leaving room for narration\n      sectionStart = Math.max(videoDuration - clip.duration - 1, 0);\n      console.log(`Section ${i} (closing): Placing at end, start=${sectionStart}s`);\n    } else {\n      sectionStart = firstImageIndex * CLIP_DURATION;\n      console.log(`Section ${i} (${section.section}): First image=${firstImageIndex}, start=${sectionStart}s`);\n    }\n    \n    timeline.push({\n      type: 'audio',\n      src: clip.url,\n      start: parseFloat(Math.max(0, sectionStart).toFixed(3)),\n      loop: 0,\n      volume: 2\n    });\n  }\n  \n  // Sort by start time to avoid any overlap issues\n  timeline.sort((a, b) => a.start - b.start);\n  \n} else {\n  // CASE 2: Fallback - no section mapping, use sequential placement\n  console.log('Strategy: No section mapping - falling back to sequential');\n  \n  const introSilence = 2; // Short intro silence\n  let t = introSilence;\n  \n  audioClips.forEach((clip, idx) => {\n    console.log(`Audio ${idx}: start=${t}s, duration=${clip.duration}s`);\n    timeline.push({\n      type: 'audio',\n      src: clip.url,\n      start: parseFloat(t.toFixed(3)),\n      loop: 0,\n      volume: 2\n    });\n    t += clip.duration + 0.5; // Small gap between clips\n  });\n}\n\n// Log final timeline\nconsole.log('Final audio timeline:');\ntimeline.forEach((t, i) => {\n  console.log(`  [${i}] start: ${t.start}s`);\n});\n\n// ----------------------\n// JSON2Video payload\n// ----------------------\nconst payload = {\n  width: 1080,\n  height: 1920,\n  quality: 'high',\n  resolution: 'custom',\n  scenes: [\n    {\n      elements: [\n        {\n          type: 'video',\n          src: videoUrl,\n          volume: 0 // Mute merged clips (they have no audio anyway)\n        },\n        ...timeline\n      ]\n    }\n  ]\n};\n\nconsole.log('Payload prepared with', timeline.length, 'audio clips');\nconsole.log('First audio starts at:', timeline[0]?.start, 's');\nconsole.log('Last audio starts at:', timeline[timeline.length - 1]?.start, 's');\n\nreturn [{ json: payload }];"
+        "jsCode": "// ============================================================\n// prepare body for jsontovideo to set video\n// FIXED: Opening always first, middle sorted by image index, closing last\n// ============================================================\n\nconst movieData = $input.first().json.movie;\n\nif (!movieData) {\n  throw new Error('PIPELINE ERROR: No movie data from merged video.');\n}\nif (!movieData.url) {\n  throw new Error('PIPELINE ERROR: movie.url is undefined. Status: ' + (movieData.status || 'unknown'));\n}\nif (movieData.duration === undefined || movieData.duration === null) {\n  throw new Error('PIPELINE ERROR: movie.duration is undefined.');\n}\n\nconst videoUrl = movieData.url;\nconst videoDuration = Number(movieData.duration);\n\nif (isNaN(videoDuration) || videoDuration <= 0) {\n  throw new Error('PIPELINE ERROR: Invalid videoDuration: ' + movieData.duration);\n}\n\nconst audioItems = $('Get duration of voices').all();\n\nif (!audioItems || audioItems.length === 0) {\n  throw new Error('PIPELINE ERROR: No audio items from Get duration of voices.');\n}\n\nconst audioClips = audioItems.map((a, idx) => {\n  const url = a.json.data?.url;\n  const duration = Number(a.json.data?.duration);\n  if (!url) {\n    throw new Error(`PIPELINE ERROR: Audio clip ${idx} has no URL.`);\n  }\n  if (isNaN(duration) || duration <= 0) {\n    throw new Error(`PIPELINE ERROR: Audio clip ${idx} has invalid duration: ${a.json.data?.duration}`);\n  }\n  return { url, duration };\n});\n\nconst CLIP_DURATION = 5;\nconst INTRO_SILENCE = 2;\n\nconst webhookData = $('Webhook').first().json.body;\nlet sectionMapping = [];\n\nif (Array.isArray(webhookData) && webhookData[0]?.sectionImageMapping) {\n  sectionMapping = webhookData[0].sectionImageMapping;\n} else if (webhookData?.sectionImageMapping) {\n  sectionMapping = webhookData.sectionImageMapping;\n}\n\nconsole.log('Audio clips count:', audioClips.length);\nconsole.log('Video duration:', videoDuration, 's');\n\nlet timeline = [];\n\nif (sectionMapping && sectionMapping.length > 0) {\n  // Separate opening, closing, and middle sections\n  const openingSection = sectionMapping.find(s => s.sectionType === 'opening');\n  const closingSection = sectionMapping.find(s => s.sectionType === 'closing');\n  const middleSections = sectionMapping\n    .filter(s => s.sectionType !== 'opening' && s.sectionType !== 'closing')\n    .map((section) => ({\n      ...section,\n      clip: audioClips[section.sectionIndex]\n    }))\n    .filter(s => s.clip);\n\n  // Sort middle sections by their first image index\n  middleSections.sort((a, b) => {\n    const aFirst = a.imageIndices.length > 0 ? Math.min(...a.imageIndices) : Infinity;\n    const bFirst = b.imageIndices.length > 0 ? Math.min(...b.imageIndices) : Infinity;\n    return aFirst - bFirst;\n  });\n\n  console.log('Strategy: Opening first, middle sorted by image index, closing last');\n  console.log('Middle section order:', middleSections.map(s => s.sectionType).join(' -> '));\n\n  let currentTime = INTRO_SILENCE;\n\n  // 1. OPENING - always plays first\n  if (openingSection) {\n    const openingClip = audioClips[openingSection.sectionIndex];\n    if (openingClip) {\n      console.log(`Section \"opening\": start=${currentTime}s, duration=${openingClip.duration}s`);\n      timeline.push({\n        type: 'audio',\n        src: openingClip.url,\n        start: parseFloat(currentTime.toFixed(3)),\n        duration: openingClip.duration,\n        loop: 0,\n        volume: 2\n      });\n      currentTime += openingClip.duration;\n    }\n  }\n\n  // 2. MIDDLE SECTIONS - sorted by image index\n  for (const sectionData of middleSections) {\n    const firstImageIndex = sectionData.imageIndices.length > 0\n      ? Math.min(...sectionData.imageIndices)\n      : 0;\n    const imageStartTime = firstImageIndex * CLIP_DURATION;\n\n    // Start at image time OR after previous narration ends (whichever is later)\n    const startTime = Math.max(imageStartTime, currentTime);\n\n    console.log(`Section \"${sectionData.sectionType}\": firstImage=${firstImageIndex}, imageStart=${imageStartTime}s, actualStart=${startTime}s, duration=${sectionData.clip.duration}s`);\n\n    timeline.push({\n      type: 'audio',\n      src: sectionData.clip.url,\n      start: parseFloat(startTime.toFixed(3)),\n      duration: sectionData.clip.duration,\n      loop: 0,\n      volume: 2\n    });\n\n    currentTime = startTime + sectionData.clip.duration;\n  }\n\n  // 3. CLOSING - always plays at end\n  if (closingSection) {\n    const closingClip = audioClips[closingSection.sectionIndex];\n    if (closingClip) {\n      const idealClosingStart = videoDuration - closingClip.duration - 1;\n      const closingStart = Math.max(idealClosingStart, currentTime);\n\n      if (closingStart + closingClip.duration > videoDuration) {\n        console.warn(`WARNING: Closing extends ${(closingStart + closingClip.duration - videoDuration).toFixed(1)}s past video end!`);\n      }\n\n      console.log(`Section \"closing\": start=${closingStart}s, duration=${closingClip.duration}s`);\n\n      timeline.push({\n        type: 'audio',\n        src: closingClip.url,\n        start: parseFloat(closingStart.toFixed(3)),\n        duration: closingClip.duration,\n        loop: 0,\n        volume: 2\n      });\n    }\n  }\n\n} else {\n  console.log('Strategy: No section mapping - sequential from start');\n  let t = INTRO_SILENCE;\n  audioClips.forEach((clip, idx) => {\n    timeline.push({\n      type: 'audio',\n      src: clip.url,\n      start: parseFloat(t.toFixed(3)),\n      duration: clip.duration,\n      loop: 0,\n      volume: 2\n    });\n    t += clip.duration;\n  });\n}\n\nconsole.log('Final audio timeline:');\ntimeline.forEach((t, i) => {\n  console.log(`  [${i}] start: ${t.start}s, duration: ${t.duration}s`);\n});\n\nconst payload = {\n  width: 1080,\n  height: 1920,\n  quality: 'high',\n  resolution: 'custom',\n  scenes: [\n    {\n      elements: [\n        { type: 'video', src: videoUrl, volume: 0 },\n        ...timeline\n      ]\n    }\n  ]\n};\n\nconsole.log('First audio starts at:', timeline[0]?.start, 's');\n\nreturn [{ json: payload }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1287,602 +1273,6 @@
       "webhookId": "db085427-02a1-4f47-9934-9c258aa929b3"
     }
   ],
-  "connections": {
-    "Output final video": {
-      "main": [
-        [
-          {
-            "node": "🎉 Send video URL",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "HTTP Request",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "json2video - Edit video1": {
-      "main": [
-        [
-          {
-            "node": "10 sec1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Check Errors ": {
-      "main": [
-        [
-          {
-            "node": "Output final video",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "10 sec1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Format variables for final editing1": {
-      "main": [
-        [
-          {
-            "node": "json2video - Edit video1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "10 sec1": {
-      "main": [
-        [
-          {
-            "node": "caption generation",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "10 sec3": {
-      "main": [
-        [
-          {
-            "node": "Get merged video Status",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Wait 30 sec1": {
-      "main": [
-        [
-          {
-            "node": "Get image from kie",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "30 sec2": {
-      "main": [
-        [
-          {
-            "node": "Get video status",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Separate image data": {
-      "main": [
-        [
-          {
-            "node": "Create task on kie to optimize images",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "caption generation": {
-      "main": [
-        [
-          {
-            "node": "Check Errors ",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Convert text to speech": {
-      "main": [
-        [
-          {
-            "node": "Upload Speech To S3",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get final video status": {
-      "main": [
-        [
-          {
-            "node": "if task is done go otherwise wait",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "30 sec": {
-      "main": [
-        [
-          {
-            "node": "Get final video status",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Wait 30 sec3": {
-      "main": [
-        [
-          {
-            "node": "Get Kie Video Urls",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "30 sec3": {
-      "main": [
-        [
-          {
-            "node": "Get Video from Jsontovideo",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Make Optimized Images Array from Nano-banana": {
-      "0": [
-        [
-          {
-            "node": "Split the Script by double newline",
-            "type": "0",
-            "index": 0
-          }
-        ]
-      ],
-      "main": [
-        [
-          {
-            "node": "Prepare Body for GPT To Analyze Images",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Standerdize Response": {
-      "main": [
-        [
-          {
-            "node": "If Status is Success Go Otherwise Wait",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get image from kie": {
-      "main": [
-        [
-          {
-            "node": "Standerdize Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Create task on kie to optimize images": {
-      "main": [
-        [
-          {
-            "node": "Wait 30 sec1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "If Status is Success Go Otherwise Wait": {
-      "main": [
-        [
-          {
-            "node": "Make Optimized Images Array from Nano-banana",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Wait 30 sec1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Prepare Body for GPT To Analyze Images": {
-      "main": [
-        [
-          {
-            "node": "Call Open AI To Analyze Images And Generate Script Accordingly",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Call Open AI To Analyze Images And Generate Script Accordingly": {
-      "main": [
-        [
-          {
-            "node": "Split the Script by double newline",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Split the Script by double newline": {
-      "main": [
-        [
-          {
-            "node": "Convert text to speech",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Upload Speech To S3": {
-      "main": [
-        [
-          {
-            "node": "Get duration of voices",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Call Kie Api Kling Model to Generate image to video": {
-      "main": [
-        [
-          {
-            "node": "Wait 30 sec3",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Prepare Body for Kie API (Kling model to generate video)": {
-      "main": [
-        [
-          {
-            "node": "Call Kie Api Kling Model to Generate image to video",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Kie Video Urls": {
-      "main": [
-        [
-          {
-            "node": "Standerdized Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Standerdized Response": {
-      "main": [
-        [
-          {
-            "node": "If Status is Success Go Otherwise Wait1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "If Status is Success Go Otherwise Wait1": {
-      "main": [
-        [
-          {
-            "node": "Seprate All Video Urls Generatad from Kei",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Wait 30 sec3",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Video from Jsontovideo": {
-      "main": [
-        [
-          {
-            "node": "If status is done go otherwise wait",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Render Kie videos in json2video (full duration)": {
-      "main": [
-        [
-          {
-            "node": "30 sec3",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "If status is done go otherwise wait": {
-      "main": [
-        [
-          {
-            "node": "Make body for jsontovideo Api to merge videos clips",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "30 sec3",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Make body for jsontovideo Api to merge videos clips": {
-      "main": [
-        [
-          {
-            "node": "Call Jsontovideo API to merge clips",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Call Jsontovideo API to merge clips": {
-      "main": [
-        [
-          {
-            "node": "10 sec3",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get merged video Status": {
-      "main": [
-        [
-          {
-            "node": "If status is done go otherwise wait1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "If status is done go otherwise wait1": {
-      "main": [
-        [
-          {
-            "node": "prepare body for jsontovideo to set video",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "10 sec3",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "prepare body for jsontovideo to set video": {
-      "main": [
-        [
-          {
-            "node": "Call Jsontovideo to create task",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Call Jsontovideo to create task": {
-      "main": [
-        [
-          {
-            "node": "30 sec2",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get video status": {
-      "main": [
-        [
-          {
-            "node": "If Task is Status is done go otherwise wait",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "If Task is Status is done go otherwise wait": {
-      "main": [
-        [
-          {
-            "node": "get video metadata to add music",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "30 sec2",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "get video metadata to add music": {
-      "main": [
-        [
-          {
-            "node": "Prepare body for jsontovideo to render video",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Call jsontovideo to render": {
-      "main": [
-        [
-          {
-            "node": "30 sec",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "if task is done go otherwise wait": {
-      "main": [
-        [
-          {
-            "node": "Format variables for final editing1",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "30 sec",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Prepare body for jsontovideo to render video": {
-      "main": [
-        [
-          {
-            "node": "Call jsontovideo to render",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Webhook": {
-      "main": [
-        [
-          {
-            "node": "Separate image data",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "save execution id to db",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get duration of voices": {
-      "main": [
-        [
-          {
-            "node": "Prepare Body for Kie API (Kling model to generate video)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Seprate All Video Urls Generatad from Kei": {
-      "main": [
-        [
-          {
-            "node": "Render Kie videos in json2video (full duration)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
-  },
-  "settings": {
-    "executionOrder": "v1",
-    "availableInMCP": false,
-    "callerPolicy": "workflowsFromSameOwner"
-  },
-  "staticData": null,
-  "meta": {
-    "templateCredsSetupCompleted": true
-  },
   "pinData": {
     "Webhook": [
       {
@@ -3707,1947 +3097,604 @@
       }
     ]
   },
-  "versionId": "1fddadf9-828e-4da4-951f-bf3119ff4e63",
-  "activeVersionId": "1fddadf9-828e-4da4-951f-bf3119ff4e63",
-  "versionCounter": 260,
-  "triggerCount": 1,
-  "shared": [
-    {
-      "updatedAt": "2026-01-13T23:28:53.822Z",
-      "createdAt": "2026-01-13T23:28:53.822Z",
-      "role": "workflow:owner",
-      "workflowId": "Qo2sirL0cDI2fVNQMJ5Eq",
-      "projectId": "rir8MSIWoGDNYiqe",
-      "project": {
-        "updatedAt": "2025-03-09T23:16:25.038Z",
-        "createdAt": "2025-03-09T23:16:22.800Z",
-        "id": "rir8MSIWoGDNYiqe",
-        "name": "Shawheen Nabizadeh <shawheendn@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "creatorId": "92d3fbdb-a49c-432b-b35c-b3d875346f08",
-        "projectRelations": [
+  "connections": {
+    "Output final video": {
+      "main": [
+        [
           {
-            "updatedAt": "2025-03-09T23:16:22.800Z",
-            "createdAt": "2025-03-09T23:16:22.800Z",
-            "userId": "92d3fbdb-a49c-432b-b35c-b3d875346f08",
-            "projectId": "rir8MSIWoGDNYiqe",
-            "user": {
-              "updatedAt": "2026-01-15T08:01:12.000Z",
-              "createdAt": "2025-03-09T23:16:20.905Z",
-              "id": "92d3fbdb-a49c-432b-b35c-b3d875346f08",
-              "email": "shawheendn@gmail.com",
-              "firstName": "Shawheen",
-              "lastName": "Nabizadeh",
-              "personalizationAnswers": null,
-              "settings": {
-                "userActivated": true,
-                "easyAIWorkflowOnboarded": true,
-                "firstSuccessfulWorkflowId": "xgyizZxdSJZuM16J",
-                "userActivatedAt": 1749947407381,
-                "npsSurvey": {
-                  "responded": true,
-                  "lastShownAt": 1753068671039
-                }
-              },
-              "disabled": false,
-              "mfaEnabled": false,
-              "lastActiveAt": "2026-01-15",
-              "isPending": false
-            }
+            "node": "🎉 Send video URL",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
           }
         ]
-      }
-    }
-  ],
-  "tags": [],
-  "activeVersion": {
-    "updatedAt": "2026-01-16T07:34:01.417Z",
-    "createdAt": "2026-01-16T07:34:01.417Z",
-    "versionId": "1fddadf9-828e-4da4-951f-bf3119ff4e63",
-    "workflowId": "Qo2sirL0cDI2fVNQMJ5Eq",
-    "nodes": [
-      {
-        "parameters": {
-          "content": "## Generate Video\n",
-          "height": 80,
-          "width": 320
-        },
-        "type": "n8n-nodes-base.stickyNote",
-        "position": [
-          43968,
-          15184
-        ],
-        "typeVersion": 1,
-        "id": "aca2c070-b9e1-40de-bac4-1485972163e7",
-        "name": "Sticky Note2"
-      },
-      {
-        "parameters": {
-          "assignments": {
-            "assignments": [
-              {
-                "id": "c7ce3d37-6455-407a-bf57-286d91c16f97",
-                "name": "video_url",
-                "value": "={{ $json.movie.url }}",
-                "type": "string"
-              }
-            ]
-          },
-          "options": {}
-        },
-        "type": "n8n-nodes-base.set",
-        "typeVersion": 3.4,
-        "position": [
-          88048,
-          29648
-        ],
-        "id": "71aafb98-7f4c-477b-a0fe-c8a8544bbdb1",
-        "name": "Output final video"
-      },
-      {
-        "parameters": {
-          "sendTo": "={{ $('Webhook').first().json.body[0].email }}",
-          "subject": "Your Property Video is Ready!",
-          "message": "=Hi there!\n\nGreat news - your property video has been generated successfully!\n\nYou can view and download your video here:\n{{ $json.movie.url }}\n\nThank you for using our service!\n\nBest regards,\nEdge AI Video Team",
-          "options": {}
-        },
-        "type": "n8n-nodes-base.gmail",
-        "typeVersion": 2.1,
-        "position": [
-          88272,
-          29824
-        ],
-        "id": "1c55a048-e89b-405d-8436-330d7c59dc20",
-        "name": "🎉 Send video URL",
-        "webhookId": "a4fb50cc-107d-4525-b37e-94b4abd7f0e3",
-        "credentials": {
-          "gmailOAuth2": {
-            "id": "LgTVoHWwrV9qYrJH",
-            "name": "Gmail account"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "method": "POST",
-          "url": "https://y-tvideo-mvp-m2dz.vercel.app/api/videos/complete",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Authorization",
-                "value": "Bearer 0f293a3e6502cda70445cb70b744afbc42356b4feec619ce937f305c15332b77"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ video_id: $('Webhook').first().json.body[0].videoId, video_url: $json.video_url, status: 'completed', execution_id: $execution.id }) }}",
-          "options": {}
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "position": [
-          88272,
-          29472
-        ],
-        "id": "1c3cda16-6a4b-49be-9132-ffe8d8ef28cf",
-        "name": "HTTP Request"
-      },
-      {
-        "parameters": {
-          "method": "POST",
-          "url": "https://backend.edgeairealty.com/api/video/track-execution",
-          "sendBody": true,
-          "bodyParameters": {
-            "parameters": [
-              {
-                "name": "executionId",
-                "value": "={{ $execution.id }}"
-              },
-              {
-                "name": "email",
-                "value": "={{ $json.body[0].email }}"
-              }
-            ]
-          },
-          "options": {}
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "position": [
-          77472,
-          29504
-        ],
-        "id": "ff161925-d657-4644-bc9f-08b49368c274",
-        "name": "save execution id to db",
-        "disabled": true
-      },
-      {
-        "parameters": {
-          "method": "POST",
-          "url": "https://api.json2video.com/v2/movies",
-          "authentication": "genericCredentialType",
-          "genericAuthType": "httpHeaderAuth",
-          "sendBody": true,
-          "contentType": "raw",
-          "rawContentType": "application/json",
-          "body": "={\n  \"comment\": \"Final video with captions and end card\",\n  \"resolution\": \"custom\",\n  \"width\": 1080,\n  \"height\": 1920,\n  \"quality\": \"high\",\n  \"scenes\": [\n    {\n      \"comment\": \"Main video scene with captions\",\n      \"duration\": {{ Number($json.video_duration) || 100 }},\n      \"elements\": [\n        {\n          \"type\": \"video\",\n          \"src\": \"{{ $json.video }}\"\n        },\n        {\n          \"type\": \"subtitles\",\n          \"language\": \"\",\n          \"start\": 0,\n          \"style\": \"classic-progressive\",\n          \"position\": \"bottom-center\",\n          \"y\": 1400,\n          \"font-family\": \"Roboto\",\n          \"font-size\": \"60px\",\n          \"font-weight\": \"700\",\n          \"color\": \"#FFFFFF\",\n          \"background-color\": \"rgba(0,0,0,0.6)\"\n        }\n      ]\n    },\n    {\n      \"comment\": \"Closing card - agent branding\",\n      \"duration\": 6,\n      \"background-color\": \"#FFFFFF\",\n      \"elements\": [\n        {\n          \"type\": \"image\",\n          \"src\": \"{{ $json.headshot_url }}\",\n          \"start\": 0.3,\n          \"duration\": 5.7,\n          \"x\": 390,\n          \"y\": 500,\n          \"width\": 300,\n          \"height\": 300,\n          \"style\": \"circle\",\n          \"fade-in\": 0.5\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"{{ $json.agent_name }}\",\n          \"start\": 0.6,\n          \"duration\": 5.4,\n          \"x\": 0,\n          \"y\": 880,\n          \"width\": 1080,\n          \"settings\": {\n            \"font-family\": \"Roboto\",\n            \"font-size\": \"56px\",\n            \"font-weight\": \"700\",\n            \"color\": \"#1A1A1A\",\n            \"text-align\": \"center\"\n          },\n          \"fade-in\": 0.4\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"{{ $json.brand_name }}\",\n          \"start\": 0.9,\n          \"duration\": 5.1,\n          \"x\": 0,\n          \"y\": 960,\n          \"width\": 1080,\n          \"settings\": {\n            \"font-family\": \"Roboto\",\n            \"font-size\": \"28px\",\n            \"font-weight\": \"400\",\n            \"color\": \"#666666\",\n            \"text-align\": \"center\"\n          },\n          \"fade-in\": 0.4\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"{{ $json.phone }}\",\n          \"start\": 1.2,\n          \"duration\": 4.8,\n          \"x\": 0,\n          \"y\": 1100,\n          \"width\": 1080,\n          \"settings\": {\n            \"font-family\": \"Roboto\",\n            \"font-size\": \"32px\",\n            \"font-weight\": \"500\",\n            \"color\": \"#333333\",\n            \"text-align\": \"center\"\n          },\n          \"fade-in\": 0.5\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"{{ $json.email }}\",\n          \"start\": 1.5,\n          \"duration\": 4.5,\n          \"x\": 0,\n          \"y\": 1160,\n          \"width\": 1080,\n          \"settings\": {\n            \"font-family\": \"Roboto\",\n            \"font-size\": \"24px\",\n            \"font-weight\": \"400\",\n            \"color\": \"#666666\",\n            \"text-align\": \"center\"\n          },\n          \"fade-in\": 0.5\n        }\n      ]\n    }\n  ]\n}",
-          "options": {}
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "position": [
-          87152,
-          29648
-        ],
-        "id": "6662028a-d554-44dc-b420-506a5c0c4372",
-        "name": "json2video - Edit video1",
-        "credentials": {
-          "httpHeaderAuth": {
-            "id": "ZmaCE8owCz8ioHlO",
-            "name": "json2video"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "conditions": {
-            "options": {
-              "version": 2,
-              "leftValue": "",
-              "caseSensitive": true,
-              "typeValidation": "strict"
-            },
-            "conditions": [
-              {
-                "id": "2643b070-cbb2-4562-9269-a61389e0c242",
-                "leftValue": "={{ $json.movie.status }}",
-                "rightValue": "done",
-                "operator": {
-                  "type": "string",
-                  "operation": "equals"
-                }
-              }
-            ],
-            "combinator": "and"
-          },
-          "options": {}
-        },
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 2.2,
-        "position": [
-          87824,
-          29648
-        ],
-        "id": "401c7c69-f249-4364-a079-4daedbded16b",
-        "name": "Check Errors "
-      },
-      {
-        "parameters": {
-          "assignments": {
-            "assignments": [
-              {
-                "id": "var-video",
-                "name": "video",
-                "value": "={{ $json.movie.url }}",
-                "type": "string"
-              },
-              {
-                "id": "var-video-duration",
-                "name": "video_duration",
-                "value": "={{ $json.movie.duration - 6 }}",
-                "type": "number"
-              },
-              {
-                "id": "var-headshot",
-                "name": "headshot_url",
-                "value": "={{ $('Webhook').first().json.body[0].headshotUrl }}",
-                "type": "string"
-              },
-              {
-                "id": "var-agent-name",
-                "name": "agent_name",
-                "value": "={{ $('Webhook').first().json.body[0].agentName }}",
-                "type": "string"
-              },
-              {
-                "id": "var-brand-name",
-                "name": "brand_name",
-                "value": "={{ $('Webhook').first().json.body[0].brandName || $('Webhook').first().json.body[0].agentName + ' Real Estate' }}",
-                "type": "string"
-              },
-              {
-                "id": "var-phone",
-                "name": "phone",
-                "value": "={{ $('Webhook').first().json.body[0].agentPhone }}",
-                "type": "string"
-              },
-              {
-                "id": "var-email",
-                "name": "email",
-                "value": "={{ $('Webhook').first().json.body[0].agentEmail || $('Webhook').first().json.body[0].email }}",
-                "type": "string"
-              },
-              {
-                "id": "var-logo",
-                "name": "logo_url",
-                "value": "={{ $('Webhook').first().json.body[0].logoUrl }}",
-                "type": "string"
-              },
-              {
-                "id": "var-captions",
-                "name": "show_captions",
-                "value": "={{ $('Webhook').first().json.body[0].showCaptions || 'true' }}",
-                "type": "string"
-              }
-            ]
-          },
-          "options": {}
-        },
-        "type": "n8n-nodes-base.set",
-        "typeVersion": 3.4,
-        "position": [
-          86928,
-          29648
-        ],
-        "id": "98ffa0db-fcad-44f5-88e0-a672372c41e8",
-        "name": "Format variables for final editing1"
-      },
-      {
-        "parameters": {
-          "amount": 10
-        },
-        "type": "n8n-nodes-base.wait",
-        "typeVersion": 1.1,
-        "position": [
-          87376,
-          29648
-        ],
-        "id": "6bfa0b28-ba19-4494-ba31-3eaf1a331674",
-        "name": "10 sec1",
-        "webhookId": "a26e82ce-7ce3-4c35-8c1b-d38d741e5517"
-      },
-      {
-        "parameters": {
-          "amount": 10
-        },
-        "type": "n8n-nodes-base.wait",
-        "typeVersion": 1.1,
-        "position": [
-          83792,
-          29648
-        ],
-        "id": "a348d831-6f2a-4a73-86cb-d489c9b48ddc",
-        "name": "10 sec3",
-        "webhookId": "a785c251-3cad-4a14-8459-982605435a38"
-      },
-      {
-        "parameters": {
-          "amount": 1
-        },
-        "type": "n8n-nodes-base.wait",
-        "typeVersion": 1.1,
-        "position": [
-          78416,
-          29648
-        ],
-        "id": "e377702b-07f8-407b-96d1-0d536646171a",
-        "name": "Wait 30 sec1",
-        "webhookId": "77b845bd-e51b-4251-be3f-0a35c9c33b73"
-      },
-      {
-        "parameters": {
-          "amount": 30
-        },
-        "type": "n8n-nodes-base.wait",
-        "typeVersion": 1.1,
-        "position": [
-          84912,
-          29648
-        ],
-        "id": "6f4111b7-d6fb-43a4-afd2-4ffa133af7ca",
-        "name": "30 sec2",
-        "webhookId": "80f025e0-e388-4a80-8b4c-1a13950f84c7"
-      },
-      {
-        "parameters": {
-          "jsCode": "// Get the images array\nconst images = $input.first().json.body[0].images\n\n// Return each image as a separate item\nreturn images.map(image => ({\n  json: {\n    imageurl: image.imageurl,\n  \n  }\n}));"
-        },
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          77472,
-          29792
-        ],
-        "id": "9ebfc7e0-1c7d-4e8c-b5db-3610540cd1ac",
-        "name": "Separate image data"
-      },
-      {
-        "parameters": {
-          "url": "=https://api.json2video.com/v2/movies?id={{ $('json2video - Edit video1').item.json.project }}",
-          "authentication": "genericCredentialType",
-          "genericAuthType": "httpHeaderAuth",
-          "options": {}
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "position": [
-          87600,
-          29648
-        ],
-        "id": "b439fc41-6315-4e23-ab65-62b30d26aaf4",
-        "name": "caption generation",
-        "credentials": {
-          "httpHeaderAuth": {
-            "id": "ZmaCE8owCz8ioHlO",
-            "name": "json2video"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "method": "POST",
-          "url": "=https://api.elevenlabs.io/v1/text-to-speech/{{ $('Webhook').first().json.body[0].voiceId }}",
-          "authentication": "genericCredentialType",
-          "genericAuthType": "httpHeaderAuth",
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ text: $json.text, model_id: \"eleven_multilingual_v2\", voice_settings: { stability: 0.5, similarity_boost: 0.75 } }) }}",
-          "options": {
-            "response": {
-              "response": {
-                "responseFormat": "file"
-              }
-            }
-          }
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "position": [
-          80208,
-          29648
-        ],
-        "id": "02687d69-da7a-4762-8e11-e651c33c6d5e",
-        "name": "Convert text to speech",
-        "credentials": {
-          "httpHeaderAuth": {
-            "id": "rKfEcb8VGDJowZG5",
-            "name": "Eleven Labs"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "url": "=https://api.json2video.com/v2/movies?id={{ $('Call jsontovideo to render').item.json.project }}",
-          "authentication": "genericCredentialType",
-          "genericAuthType": "httpHeaderAuth",
-          "options": {}
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "position": [
-          86480,
-          29648
-        ],
-        "id": "dcd0b02c-2c24-4b81-808d-b6149ac0a249",
-        "name": "Get final video status",
-        "credentials": {
-          "httpHeaderAuth": {
-            "id": "ZmaCE8owCz8ioHlO",
-            "name": "json2video"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "amount": 30
-        },
-        "type": "n8n-nodes-base.wait",
-        "typeVersion": 1.1,
-        "position": [
-          86256,
-          29648
-        ],
-        "id": "507cc1d2-20c2-4883-be96-f557368895c3",
-        "name": "30 sec",
-        "webhookId": "80f025e0-e388-4a80-8b4c-1a13950f84c7"
-      },
-      {
-        "parameters": {
-          "amount": 30
-        },
-        "type": "n8n-nodes-base.wait",
-        "typeVersion": 1.1,
-        "position": [
-          81328,
-          29648
-        ],
-        "id": "61e14c86-f6b6-4473-a25d-a6c169db265f",
-        "name": "Wait 30 sec3",
-        "webhookId": "cecadd7e-cb24-46a8-8889-a7ddedf4e3ff"
-      },
-      {
-        "parameters": {
-          "amount": 30
-        },
-        "type": "n8n-nodes-base.wait",
-        "typeVersion": 1.1,
-        "position": [
-          82672,
-          29648
-        ],
-        "id": "0725448f-ad1c-4411-b3f0-d27c3497e0ac",
-        "name": "30 sec3",
-        "webhookId": "0ef02fcf-1b28-452f-8a7f-edbecd24b004"
-      },
-      {
-        "parameters": {
-          "jsCode": "const items = $input.all();\n\nconst grouped = [];\nlet groupIndex = 1;\n\nfor (let i = 0; i < items.length; i += 1) {\n  const groupItems = items.slice(i, i + 1);\n\n  // Parse image URLs\n  const images = groupItems.map(item => {\n    const result = JSON.parse(item.json.data.resultJson);\n    return result.resultUrls[0];\n  });\n\n\n  grouped.push({\n    json: {\n      images: images,\n    }\n  });\n\n  groupIndex++;\n}\n\n// Return grouped items with duration\nreturn grouped;\n"
-        },
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          79312,
-          29648
-        ],
-        "id": "870ee445-139a-4ef9-99cd-bf136fb349c6",
-        "name": "Make Optimized Images Array from Nano-banana"
-      },
-      {
-        "parameters": {
-          "jsCode": "// ✅ Get all items from both nodes\nconst request2Items = $input.all();\nconst request1Items = $items(\"Create task on kie to optimize images\");\n\n// Flatten their JSON data\nconst request2Data = request2Items.map(item => item.json);\nconst request1Data = request1Items.map(item => item.json);\n\n// Check states\nconst hasFailed = request2Data.some(r => r?.data?.state === \"fail\");\nconst allSuccess = request2Data.every(r => r?.data?.state === \"success\");\n\nif (hasFailed) {\n  // ❌ Terminate workflow immediately\n  throw new Error(\"❌ One or more items have failed. Stopping execution.\");\n}\n\nif (allSuccess) {\n  // ✅ All succeeded — append status \"success\"\n  let successData = request2Data.map(item => ({\n    json: {\n      ...item,\n      status: \"success\",\n    },\n  }));\n\n  // 🔹 Duplicate the first item and add to end\n  const firstItemCopy = {\n    json: {\n      ...successData[0].json\n    }\n  };\n  successData.push(firstItemCopy);\n\n  return successData;\n} else {\n  // ⏳ Some still running — append status \"pending\"\n  return request1Data.map(item => ({\n    json: {\n      ...item,\n      status: \"pending\",\n    },\n  }));\n}\n"
-        },
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          78864,
-          29648
-        ],
-        "id": "7645c9ce-1e12-4694-aa27-8150878bf06a",
-        "name": "Standerdize Response"
-      },
-      {
-        "parameters": {
-          "url": "https://api.kie.ai/api/v1/jobs/recordInfo",
-          "sendQuery": true,
-          "queryParameters": {
-            "parameters": [
-              {
-                "name": "taskId",
-                "value": "={{ $json.data.taskId }}"
-              }
-            ]
-          },
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Authorization",
-                "value": "Bearer e46522bee7b4aebb303feeb54eb8e32e"
-              },
-              {
-                "name": "Cookie",
-                "value": "JSESSIONID=9418A560CB6F2F16E797A92ADDCC3F4B"
-              },
-              {
-                "name": "cookie",
-                "value": "JSESSIONID=9418A560CB6F2F16E797A92ADDCC3F4B;"
-              }
-            ]
-          },
-          "options": {
-            "redirect": {
-              "redirect": {}
-            }
-          }
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "position": [
-          78640,
-          29648
-        ],
-        "id": "ca118dab-6d76-49c1-8191-408248a36d33",
-        "name": "Get image from kie"
-      },
-      {
-        "parameters": {
-          "method": "POST",
-          "url": "https://api.kie.ai/api/v1/jobs/createTask",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Authorization",
-                "value": "Bearer e46522bee7b4aebb303feeb54eb8e32e"
-              },
-              {
-                "name": "Cookie",
-                "value": "JSESSIONID=9418A560CB6F2F16E797A92ADDCC3F4B"
-              },
-              {
-                "name": "Cookie",
-                "value": "JSESSIONID=9418A560CB6F2F16E797A92ADDCC3F4B;"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={\n  \"model\": \"google/nano-banana-edit\",\n  \"input\": {\n    \"image_urls\": [\"{{ $json.imageurl }}\"],\n    \"prompt\": \"Take the provided image of any size and convert it to vertical 9:16 aspect ratio (1080×1920).Keep the main subject perfectly centered.Automatically fill extra space (top, bottom, or sides) naturally to make it a full vertical HD image.Preserve all colors, textures, details, and lighting of the original image.Do not crop or distort the main subject.Output should be high definition, clean, and realistic, ready for Reels/TikTok.\",\n    \"output_format\": \"png\",\n    \"image_size\": \"9:16\"\n  }\n} ",
-          "options": {}
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.3,
-        "position": [
-          77744,
-          29648
-        ],
-        "id": "2ad5ad30-5a77-4306-925e-35fa0d962a4f",
-        "name": "Create task on kie to optimize images"
-      },
-      {
-        "parameters": {
-          "conditions": {
-            "options": {
-              "version": 2,
-              "leftValue": "",
-              "caseSensitive": true,
-              "typeValidation": "strict"
-            },
-            "conditions": [
-              {
-                "id": "success-condition",
-                "leftValue": "={{ $json.status }}",
-                "rightValue": "success",
-                "operator": {
-                  "type": "string",
-                  "operation": "equals"
-                }
-              },
-              {
-                "id": "error-condition",
-                "leftValue": "={{ $json.status }}",
-                "rightValue": "error",
-                "operator": {
-                  "type": "string",
-                  "operation": "equals"
-                }
-              },
-              {
-                "id": "failed-condition",
-                "leftValue": "={{ $json.status }}",
-                "rightValue": "failed",
-                "operator": {
-                  "type": "string",
-                  "operation": "equals"
-                }
-              }
-            ],
-            "combinator": "or"
-          },
-          "options": {}
-        },
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 2.2,
-        "position": [
-          79088,
-          29648
-        ],
-        "id": "2c66163b-9d6d-4491-8d5b-2602197bd389",
-        "name": "If Status is Success Go Otherwise Wait",
-        "alwaysOutputData": false
-      },
-      {
-        "parameters": {
-          "jsCode": "// Get grouped data\nconst grouped = $input.all().map(item => item.json);\n\n// ---------- PROPERTY INFO ----------\nconst property = $('Webhook').first().json.body[0];\nconst propertyType = property.propertyType;\nconst city = property.city;\nconst price = `$${property.price}`;\nconst BedRoom = property.bedroomCount || '';\nconst RestRoom = property.bathroomCount || '';\nconst mainSellingPoints = property.mainSellingPoints || [];\nconst squareFeet = property.size || '';\nconst lotSize = property.lotSize || '';\nconst preferredTone = property.preferredTone || 'enthusiastic';\n\n// Selling points text\nconst sellingPointsText =\n  mainSellingPoints.length === 1\n    ? mainSellingPoints[0]\n    : mainSellingPoints.length === 2\n    ? `${mainSellingPoints[0]} and ${mainSellingPoints[1]}`\n    : `${mainSellingPoints.slice(0, -1).join(', ')} and ${mainSellingPoints[mainSellingPoints.length - 1]}`;\n\nconst roomCountsText = lotSize\n  ? `${BedRoom} bed, ${RestRoom} bath, ${lotSize} lot size`\n  : `${BedRoom} bed, ${RestRoom} bath`;\n\n// Flatten all images for AI context\nconst allImages = grouped.flatMap(g => g.images);\n\n// Convert images to base64 via API (temp URLs not accessible to OpenAI)\nconst base64Response = await fetch('https://y-tvideo-mvp-m2dz.vercel.app/api/images/to-base64', {\n  method: 'POST',\n  headers: {\n    'Content-Type': 'application/json',\n    'Authorization': 'Bearer 0f293a3e6502cda70445cb70b744afbc42356b4feec619ce937f305c15332b77'\n  },\n  body: JSON.stringify({ urls: allImages })\n});\n\nconst base64Data = await base64Response.json();\nconst base64Images = base64Data.images || [];\n\n// Prepare images for AI analysis using base64\nconst imagesForAI = base64Images.map(img => ({\n  type: \"image_url\",\n  image_url: { url: img.base64 }\n}));\n\n// ---------- USER PROMPT WITH 5 PARTS ----------\nconst userPrompt = `\nWrite a real estate short-form script in a ${preferredTone} tone.\n\nThe property is a ${propertyType} in ${city} priced at ${price}.\nMention ${BedRoom} bedrooms, ${RestRoom} bathrooms, ${squareFeet} sq ft, ${roomCountsText},\nand key features (${sellingPointsText}).\n\nUse image cues naturally (do not say \"look at this\" or \"see that\").\n\nSTRUCTURE & OUTPUT FORMAT (VERY IMPORTANT):\n\nWrite the script as EXACTLY 5 parts — NO extra versions, NO alternatives.\n\nPart 1 — Intro (include price, city, and property type)\nPart 2 — Rooms & specs\nPart 3 — Image-based description\nPart 4 — Motivation — highlight key features and images to excite the client\nPart 5 — Outro call-to-action\n\nReturn the final output as:\n\n[Part 1 text]\n\\\\n\\\\n\n[Part 2 text]\n\\\\n\\\\n\n[Part 3 text]\n\\\\n\\\\n\n[Part 4 text]\n\\\\n\\\\n\n[Part 5 text]\n\nDo NOT add headings, labels, numbers, brackets, or bullet points.\nTotal length should remain around 100–110 words overall (all parts combined).\nKeep it human, smooth, and friendly.\n`;\n\n// ---------- OPENAI API PAYLOAD ----------\nconst apiPayload = {\n  model: \"gpt-4o\",\n  messages: [\n    {\n      role: \"system\",\n      content: `You are an expert real estate copywriter. Produce only one script and follow the exact formatting rules.`\n    },\n    {\n      role: \"user\",\n      content: [\n        ...imagesForAI,\n        { type: \"text\", text: userPrompt }\n      ]\n    }\n  ],\n  temperature: 0.9\n};\n\nreturn { json: apiPayload };\n"
-        },
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          79536,
-          29648
-        ],
-        "id": "1f9548d6-5081-47ea-9e95-fff9628e8fdd",
-        "name": "Prepare Body for GPT To Analyze Images",
-        "disabled": true
-      },
-      {
-        "parameters": {
-          "method": "POST",
-          "url": "https://api.openai.com/v1/chat/completions",
-          "authentication": "predefinedCredentialType",
-          "nodeCredentialType": "openAiApi",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ $json }}",
-          "options": {}
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.3,
-        "position": [
-          79760,
-          29648
-        ],
-        "id": "bfdd831d-ce38-4dff-a826-0e5b2e11f5bb",
-        "name": "Call Open AI To Analyze Images And Generate Script Accordingly",
-        "credentials": {
-          "openAiApi": {
-            "id": "t6s7bmAzIhZsEH0A",
-            "name": "OpenAi account 2"
-          }
-        },
-        "disabled": true
-      },
-      {
-        "parameters": {
-          "jsCode": "// Check if frontend provided script sections (respects user's image order)\nconst webhookResponse = $('Webhook').first().json.body[0].webhookResponse;\n\nif (webhookResponse && webhookResponse.length > 0) {\n  // Use frontend's pre-generated script\n  return webhookResponse.map(text => ({\n    json: { text }\n  }));\n}\n\n// Fallback: use GPT-generated script (legacy path)\nconst content = $input.first().json.choices[0].message.content;\nconst contentArray = content.split('\\n\\n');\nreturn contentArray.map(part => ({\n  json: { text: part }\n}));\n"
-        },
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          79984,
-          29648
-        ],
-        "id": "0739a34c-0a42-43a8-881d-1c8a3bdd1370",
-        "name": "Split the Script by double newline"
-      },
-      {
-        "parameters": {
-          "method": "POST",
-          "url": "https://y-tvideo-mvp-m2dz.vercel.app/api/audio/upload",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Content-Type",
-                "value": "audio/mpeg"
-              },
-              {
-                "name": "Authorization",
-                "value": "Bearer 0f293a3e6502cda70445cb70b744afbc42356b4feec619ce937f305c15332b77"
-              }
-            ]
-          },
-          "sendBody": true,
-          "contentType": "binaryData",
-          "inputDataFieldName": "data",
-          "options": {}
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "position": [
-          80432,
-          29648
-        ],
-        "id": "141e090b-e8bb-4c37-95e3-069db7cd3284",
-        "name": "Upload Speech To S3"
-      },
-      {
-        "parameters": {
-          "method": "POST",
-          "url": "https://y-tvideo-mvp-m2dz.vercel.app/api/audio/duration",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ url: $json.Location }) }}",
-          "options": {}
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.3,
-        "position": [
-          80656,
-          29648
-        ],
-        "id": "5541fafa-d1a3-4490-a949-46aa3a07d773",
-        "name": "Get duration of voices"
-      },
-      {
-        "parameters": {
-          "method": "POST",
-          "url": "https://api.kie.ai/api/v1/jobs/createTask",
-          "sendHeaders": true,
-          "specifyHeaders": "keypair",
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Authorization",
-                "value": "Bearer e46522bee7b4aebb303feeb54eb8e32e"
-              },
-              {
-                "name": "Cookie",
-                "value": "JSESSIONID=9418A560CB6F2F16E797A92ADDCC3F4B"
-              }
-            ]
-          },
-          "sendBody": true,
-          "contentType": "json",
-          "specifyBody": "json",
-          "jsonBody": "={\n  \"model\": \"kling-2.6/image-to-video\",\n  \"input\": {\n    \"image_urls\": [\"{{ $json.imageurl }}\"],\n    \"prompt\": \"{{ $json.prompt }}\",\n    \"negative_prompt\": \"{{ $json.negative_prompt }}\",\n    \"duration\": \"5\",\n    \"sound\": false\n  }\n}",
-          "options": {}
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.3,
-        "position": [
-          81104,
-          29648
-        ],
-        "id": "0ef87ce6-24c6-4152-9f75-811da7fd2849",
-        "name": "Call Kie Api Kling Model to Generate image to video",
-        "credentials": {
-          "httpHeaderAuth": {
-            "id": "T1nfcHN1C0bAAIpR",
-            "name": "Kie.ai"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "jsCode": "const images = $('Get image from kie').all();\n\n// Kling prompts optimized for real estate - avoid mirroring/reflection artifacts\nconst prompts = [\n  \"Gentle slow zoom-in, subtle forward camera motion over 5 seconds. Maintain original image integrity with no mirroring, no reflections, no distortion. Keep all edges and boundaries stable. Smooth cinematic quality with natural parallax. Preserve exact colors and lighting.\",\n  \"Very subtle left-to-right drift, barely perceptible slow pan over 5 seconds. No warping, no mirroring, no edge distortion. Maintain image fidelity throughout. Gentle ambient motion with stable framing. Keep original composition intact.\",\n  \"Slow gentle push-in with minimal camera movement over 5 seconds. Preserve image exactly as shown with no transformation or reflection effects. Subtle depth animation only. Clean professional real estate video quality.\"\n];\n\n// Negative prompt to avoid unwanted elements\nconst negativePrompt = \"ceiling fan, spinning fan, rotating blades, mirrored image, reflection, distortion, warping, duplicated elements, reversed image, split screen, kaleidoscope effect, morphing, deformation\";\n\nreturn images.map(image => {\n  const parsed = JSON.parse(image.json.data.resultJson);\n  const resultUrl = parsed.resultUrls[0];\n\n  return {\n    json: {\n      imageurl: resultUrl,\n      prompt: prompts[Math.floor(Math.random() * prompts.length)],\n      negative_prompt: negativePrompt\n    }\n  };\n});\n"
-        },
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          80880,
-          29648
-        ],
-        "id": "ca41e087-9f4f-4667-89bb-a33e65fce269",
-        "name": "Prepare Body for Kie API (Kling model to generate video)"
-      },
-      {
-        "parameters": {
-          "url": "https://api.kie.ai/api/v1/jobs/recordInfo",
-          "sendQuery": true,
-          "queryParameters": {
-            "parameters": [
-              {
-                "name": "taskId",
-                "value": "={{ $json.data.taskId }}"
-              }
-            ]
-          },
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Authorization",
-                "value": "Bearer e46522bee7b4aebb303feeb54eb8e32e"
-              },
-              {
-                "name": "Cookie",
-                "value": "JSESSIONID=9418A560CB6F2F16E797A92ADDCC3F4B"
-              },
-              {
-                "name": "cookie",
-                "value": "JSESSIONID=9418A560CB6F2F16E797A92ADDCC3F4B;"
-              }
-            ]
-          },
-          "options": {
-            "redirect": {
-              "redirect": {}
-            }
-          }
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "position": [
-          81552,
-          29648
-        ],
-        "id": "52fa8d7c-ddc7-45b3-ac29-5a372970a57a",
-        "name": "Get Kie Video Urls"
-      },
-      {
-        "parameters": {
-          "jsCode": "// ✅ Get all items from both nodes\nconst request2Items = $input.all();\nconst request1Items = $items(\"Call Kie Api Kling Model to Generate image to video\");\n\n// Flatten their JSON data\nconst request2Data = request2Items.map(item => item.json);\nconst request1Data = request1Items.map(item => item.json);\n\n// Check states\nconst hasFailed = request2Data.some(r => r?.data?.state === \"failed\");\nconst allSuccess = request2Data.every(r => r?.data?.state === \"success\");\n\nif (hasFailed) {\n  // ❌ Terminate workflow immediately\n  throw new Error(\"❌ One or more items have failed. Stopping execution.\");\n}\n\nif (allSuccess) {\n  // ✅ All succeeded — append status \"success\"\n  return request2Data.map(item => ({\n    json: {\n      ...item,\n      status: \"success\",\n    },\n  }));\n} else {\n  // ⏳ Some still running — append status \"pending\"\n  return request1Data.map(item => ({\n    json: {\n      ...item,\n      status: \"pending\",\n    },\n  }));\n}\n"
-        },
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          81776,
-          29648
-        ],
-        "id": "9d6768de-e904-4613-af4d-05adfe528f3b",
-        "name": "Standerdized Response"
-      },
-      {
-        "parameters": {
-          "conditions": {
-            "options": {
-              "version": 2,
-              "leftValue": "",
-              "caseSensitive": true,
-              "typeValidation": "strict"
-            },
-            "conditions": [
-              {
-                "id": "success-condition",
-                "leftValue": "={{ $json.status }}",
-                "rightValue": "success",
-                "operator": {
-                  "type": "string",
-                  "operation": "equals"
-                }
-              },
-              {
-                "id": "error-condition",
-                "leftValue": "={{ $json.status }}",
-                "rightValue": "error",
-                "operator": {
-                  "type": "string",
-                  "operation": "equals"
-                }
-              },
-              {
-                "id": "failed-condition",
-                "leftValue": "={{ $json.status }}",
-                "rightValue": "failed",
-                "operator": {
-                  "type": "string",
-                  "operation": "equals"
-                }
-              }
-            ],
-            "combinator": "or"
-          },
-          "options": {}
-        },
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 2.2,
-        "position": [
-          82000,
-          29648
-        ],
-        "id": "2bc82602-b417-4fc9-ab93-ff2b8ac99717",
-        "name": "If Status is Success Go Otherwise Wait1",
-        "alwaysOutputData": false
-      },
-      {
-        "parameters": {
-          "jsCode": "// Get all Kling video results (flattened)\nconst allItems = $input.all();\n\n// Flatten all URLs into a single array\nconst allUrls = allItems.flatMap(item => {\n  const result = JSON.parse(item.json.data.resultJson);\n  return result.resultUrls || [];\n});\n\n// Define positions (example, repeat if needed)\n\n// Map URLs to JSON output\nreturn allUrls.map((videoUrl, index) => {\n  return {\n    json: {\n      imageVideoUrl: videoUrl\n    }\n  };\n});\n"
-        },
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          82224,
-          29648
-        ],
-        "id": "837a7bd0-c5b9-450a-81b9-cbe3a64001f3",
-        "name": "Seprate All Video Urls Generatad from Kei"
-      },
-      {
-        "parameters": {
-          "url": "=https://api.json2video.com/v2/movies?id={{ $('Render Kie videos in json2video (full duration)').item.json.project }}",
-          "authentication": "genericCredentialType",
-          "genericAuthType": "httpHeaderAuth",
-          "options": {}
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "position": [
-          82896,
-          29648
-        ],
-        "id": "d4c3bd15-0e85-4740-b0e6-d030a1ea739b",
-        "name": "Get Video from Jsontovideo",
-        "credentials": {
-          "httpHeaderAuth": {
-            "id": "ZmaCE8owCz8ioHlO",
-            "name": "json2video"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "method": "POST",
-          "url": "https://api.json2video.com/v2/movies",
-          "authentication": "genericCredentialType",
-          "genericAuthType": "httpHeaderAuth",
-          "sendBody": true,
-          "contentType": "raw",
-          "rawContentType": "application/json",
-          "body": "={\n  \"resolution\": \"custom\",\n  \"quality\": \"high\",\n  \"width\": 1080,\n  \"height\": 1920,\n  \"scenes\": [\n    {\n      \"elements\": [\n        {\n          \"type\": \"video\",\n          \"src\": \"{{ $json.imageVideoUrl }}\",\n          \"start\": 0,\n          \"width\": 1080,\n          \"height\": 1920\n        }\n      ]\n    }\n  ]\n}",
-          "options": {}
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.3,
-        "position": [
-          82448,
-          29648
-        ],
-        "id": "f5c5c367-aac1-4a95-ba40-024203da1ef4",
-        "name": "Render Kie videos in json2video (full duration)",
-        "credentials": {
-          "httpHeaderAuth": {
-            "id": "ZmaCE8owCz8ioHlO",
-            "name": "json2video"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "conditions": {
-            "options": {
-              "version": 2,
-              "leftValue": "",
-              "caseSensitive": true,
-              "typeValidation": "loose"
-            },
-            "conditions": [
-              {
-                "id": "done-condition",
-                "leftValue": "={{ $json.movie.status }}",
-                "rightValue": "done",
-                "operator": {
-                  "type": "string",
-                  "operation": "equals"
-                }
-              },
-              {
-                "id": "error-condition",
-                "leftValue": "={{ $json.movie.status }}",
-                "rightValue": "error",
-                "operator": {
-                  "type": "string",
-                  "operation": "equals"
-                }
-              }
-            ],
-            "combinator": "or"
-          },
-          "looseTypeValidation": true,
-          "options": {}
-        },
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 2.2,
-        "position": [
-          83120,
-          29648
-        ],
-        "id": "4a3a7b8f-a956-4cab-8cbc-0299a1f220e7",
-        "name": "If status is done go otherwise wait"
-      },
-      {
-        "parameters": {
-          "jsCode": "const items = $input.all();\n\n// Extract video URLs\nconst videoUrls = items.map(item => item.json.movie.url);\n\n// Build scenes array - simple structure without transitions\nconst scenes = videoUrls.map((url, index) => ({\n  elements: [\n    {\n      type: \"video\",\n      src: url\n    }\n  ]\n}));\n\n// JSON2Video payload\nconst json2videoPayload = {\n  resolution: \"custom\",\n  width: 1080,\n  height: 1920,\n  quality: \"high\",\n  scenes: scenes\n};\n\nreturn [{ json: json2videoPayload }];"
-        },
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          83344,
-          29648
-        ],
-        "id": "7c8cadad-9c05-4b18-9c65-8b390860dd7a",
-        "name": "Make body for jsontovideo Api to merge videos clips"
-      },
-      {
-        "parameters": {
-          "method": "POST",
-          "url": "https://api.json2video.com/v2/movies",
-          "authentication": "genericCredentialType",
-          "genericAuthType": "httpHeaderAuth",
-          "sendBody": true,
-          "contentType": "raw",
-          "rawContentType": "scenes",
-          "body": "={{ $json}}",
-          "options": {}
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.3,
-        "position": [
-          83552,
-          29648
-        ],
-        "id": "7095218c-5573-4f82-8a13-0c938c6ce63a",
-        "name": "Call Jsontovideo API to merge clips",
-        "credentials": {
-          "httpHeaderAuth": {
-            "id": "ZmaCE8owCz8ioHlO",
-            "name": "json2video"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "url": "=https://api.json2video.com/v2/movies?id={{ $('Call Jsontovideo API to merge clips').item.json.project }}",
-          "authentication": "genericCredentialType",
-          "genericAuthType": "httpHeaderAuth",
-          "options": {}
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "position": [
-          84016,
-          29648
-        ],
-        "id": "fa34bbc2-2193-4813-903b-3b75836fca46",
-        "name": "Get merged video Status",
-        "credentials": {
-          "httpHeaderAuth": {
-            "id": "ZmaCE8owCz8ioHlO",
-            "name": "json2video"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "conditions": {
-            "options": {
-              "version": 2,
-              "leftValue": "",
-              "caseSensitive": true,
-              "typeValidation": "loose"
-            },
-            "conditions": [
-              {
-                "id": "2643b070-cbb2-4562-9269-a61389e0c242",
-                "leftValue": "={{ $json.movie.success }}",
-                "rightValue": "true",
-                "operator": {
-                  "type": "boolean",
-                  "operation": "true",
-                  "singleValue": true
-                }
-              }
-            ],
-            "combinator": "and"
-          },
-          "looseTypeValidation": true,
-          "options": {}
-        },
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 2.2,
-        "position": [
-          84240,
-          29648
-        ],
-        "id": "ff3a6e2f-26ae-49aa-9466-f3bc7b811308",
-        "name": "If status is done go otherwise wait1"
-      },
-      {
-        "parameters": {
-          "jsCode": "// ============================================================\n// prepare body for jsontovideo to set video\n// Adds narration audio to merged video clips\n// FIXED: Uses sectionImageMapping for sync - audio plays when its images appear\n// ============================================================\n\nconst movieData = $input.first().json.movie;\n\n// VALIDATION: Ensure we have valid movie data\nif (!movieData) {\n  throw new Error('PIPELINE ERROR: No movie data from merged video.');\n}\nif (!movieData.url) {\n  throw new Error('PIPELINE ERROR: movie.url is undefined. Merged video may have failed. Status: ' + (movieData.status || 'unknown'));\n}\nif (movieData.duration === undefined || movieData.duration === null) {\n  throw new Error('PIPELINE ERROR: movie.duration is undefined. Cannot calculate narration timing.');\n}\n\nconst videoUrl = movieData.url;\nconst videoDuration = Number(movieData.duration);\n\n// VALIDATION: Ensure videoDuration is a valid positive number\nif (isNaN(videoDuration) || videoDuration <= 0) {\n  throw new Error('PIPELINE ERROR: Invalid videoDuration: ' + movieData.duration + '. Must be a positive number.');\n}\n\n// Get audio items\nconst audioItems = $('Get duration of voices').all();\n\nif (!audioItems || audioItems.length === 0) {\n  throw new Error('PIPELINE ERROR: No audio items from Get duration of voices.');\n}\n\nconst audioClips = audioItems.map((a, idx) => {\n  const url = a.json.data?.url;\n  const duration = Number(a.json.data?.duration);\n  if (!url) {\n    throw new Error(`PIPELINE ERROR: Audio clip ${idx} has no URL.`);\n  }\n  if (isNaN(duration) || duration <= 0) {\n    throw new Error(`PIPELINE ERROR: Audio clip ${idx} has invalid duration: ${a.json.data?.duration}`);\n  }\n  return { url, duration };\n});\n\n// ----------------------\n// SECTION-AWARE TIMING\n// ----------------------\nconst CLIP_DURATION = 5; // Each Kling clip = 5 seconds\n\n// Get section-to-image mapping from webhook\nconst webhookData = $('Webhook').first().json.body;\nlet sectionMapping = [];\n\n// Handle both array and single object formats\nif (Array.isArray(webhookData) && webhookData[0]?.sectionImageMapping) {\n  sectionMapping = webhookData[0].sectionImageMapping;\n} else if (webhookData?.sectionImageMapping) {\n  sectionMapping = webhookData.sectionImageMapping;\n}\n\nconsole.log('Section mapping from webhook:', JSON.stringify(sectionMapping, null, 2));\nconsole.log('Audio clips count:', audioClips.length);\nconsole.log('Video duration:', videoDuration, 's');\n\nlet timeline = [];\n\nif (sectionMapping && sectionMapping.length > 0) {\n  // CASE 1: Use section mapping for sync\n  console.log('Strategy: Section-aware timing - audio syncs with image appearance');\n  \n  // Section order from frontend: [opening, outdoor, living, private, closing]\n  // But sectionMapping may have different order based on image assignments\n  \n  for (let i = 0; i < audioClips.length; i++) {\n    const section = sectionMapping[i];\n    const clip = audioClips[i];\n    \n    if (!section || !section.imageIndices || section.imageIndices.length === 0) {\n      // If no section mapping, place after previous clip\n      const lastEnd = timeline.length > 0 \n        ? timeline[timeline.length - 1].start + audioClips[i - 1].duration \n        : 0;\n      console.log(`Section ${i} (${section?.section || 'unknown'}): No image mapping, placing at ${lastEnd}s`);\n      timeline.push({\n        type: 'audio',\n        src: clip.url,\n        start: parseFloat(lastEnd.toFixed(3)),\n        loop: 0,\n        volume: 2\n      });\n      continue;\n    }\n    \n    // Find earliest image in this section\n    const firstImageIndex = Math.min(...section.imageIndices);\n    \n    // Narration starts when its first image appears\n    // Special handling for 'closing' section - place at end of video\n    let sectionStart;\n    if (section.section === 'closing') {\n      // Closing should start near end, leaving room for narration\n      sectionStart = Math.max(videoDuration - clip.duration - 1, 0);\n      console.log(`Section ${i} (closing): Placing at end, start=${sectionStart}s`);\n    } else {\n      sectionStart = firstImageIndex * CLIP_DURATION;\n      console.log(`Section ${i} (${section.section}): First image=${firstImageIndex}, start=${sectionStart}s`);\n    }\n    \n    timeline.push({\n      type: 'audio',\n      src: clip.url,\n      start: parseFloat(Math.max(0, sectionStart).toFixed(3)),\n      loop: 0,\n      volume: 2\n    });\n  }\n  \n  // Sort by start time to avoid any overlap issues\n  timeline.sort((a, b) => a.start - b.start);\n  \n} else {\n  // CASE 2: Fallback - no section mapping, use sequential placement\n  console.log('Strategy: No section mapping - falling back to sequential');\n  \n  const introSilence = 2; // Short intro silence\n  let t = introSilence;\n  \n  audioClips.forEach((clip, idx) => {\n    console.log(`Audio ${idx}: start=${t}s, duration=${clip.duration}s`);\n    timeline.push({\n      type: 'audio',\n      src: clip.url,\n      start: parseFloat(t.toFixed(3)),\n      loop: 0,\n      volume: 2\n    });\n    t += clip.duration + 0.5; // Small gap between clips\n  });\n}\n\n// Log final timeline\nconsole.log('Final audio timeline:');\ntimeline.forEach((t, i) => {\n  console.log(`  [${i}] start: ${t.start}s`);\n});\n\n// ----------------------\n// JSON2Video payload\n// ----------------------\nconst payload = {\n  width: 1080,\n  height: 1920,\n  quality: 'high',\n  resolution: 'custom',\n  scenes: [\n    {\n      elements: [\n        {\n          type: 'video',\n          src: videoUrl,\n          volume: 0 // Mute merged clips (they have no audio anyway)\n        },\n        ...timeline\n      ]\n    }\n  ]\n};\n\nconsole.log('Payload prepared with', timeline.length, 'audio clips');\nconsole.log('First audio starts at:', timeline[0]?.start, 's');\nconsole.log('Last audio starts at:', timeline[timeline.length - 1]?.start, 's');\n\nreturn [{ json: payload }];"
-        },
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          84464,
-          29648
-        ],
-        "id": "cae2002a-6959-4678-92f2-f4c379fc3425",
-        "name": "prepare body for jsontovideo to set video"
-      },
-      {
-        "parameters": {
-          "method": "POST",
-          "url": "https://api.json2video.com/v2/movies",
-          "authentication": "genericCredentialType",
-          "genericAuthType": "httpHeaderAuth",
-          "sendBody": true,
-          "contentType": "raw",
-          "rawContentType": "scenes",
-          "body": "={{ $json}}",
-          "options": {}
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.3,
-        "position": [
-          84688,
-          29648
-        ],
-        "id": "066479f5-4324-4bc4-8321-e5853e007784",
-        "name": "Call Jsontovideo to create task",
-        "credentials": {
-          "httpHeaderAuth": {
-            "id": "ZmaCE8owCz8ioHlO",
-            "name": "json2video"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "url": "=https://api.json2video.com/v2/movies?id={{ $('Call Jsontovideo to create task').item.json.project }}",
-          "authentication": "genericCredentialType",
-          "genericAuthType": "httpHeaderAuth",
-          "options": {}
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "position": [
-          85136,
-          29648
-        ],
-        "id": "afd367fd-42bb-452f-9ac9-31ce4d75af0c",
-        "name": "Get video status",
-        "credentials": {
-          "httpHeaderAuth": {
-            "id": "ZmaCE8owCz8ioHlO",
-            "name": "json2video"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "conditions": {
-            "options": {
-              "version": 2,
-              "leftValue": "",
-              "caseSensitive": true,
-              "typeValidation": "loose"
-            },
-            "conditions": [
-              {
-                "id": "cond1-success-true",
-                "leftValue": "={{ $json.movie.success }}",
-                "rightValue": true,
-                "operator": {
-                  "type": "boolean",
-                  "operation": "equals"
-                }
-              }
-            ],
-            "combinator": "and"
-          },
-          "looseTypeValidation": true,
-          "options": {}
-        },
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 2.2,
-        "position": [
-          85360,
-          29648
-        ],
-        "id": "3a550f1e-d2ed-47ee-a352-65644d88b380",
-        "name": "If Task is Status is done go otherwise wait"
-      },
-      {
-        "parameters": {
-          "jsCode": "// Validate input from previous render step\nconst movieData = $input.first().json.movie;\nif (!movieData) {\n  throw new Error('PIPELINE ERROR: No movie data from previous render. Check \"Get video status\" output.');\n}\nif (!movieData.url) {\n  throw new Error('PIPELINE ERROR: movie.url is undefined. Previous render (\"Call Jsontovideo to create task\") may have failed. Status: ' + (movieData.status || 'unknown') + ', Error: ' + (movieData.message || 'none'));\n}\nif (!movieData.duration) {\n  throw new Error('PIPELINE ERROR: movie.duration is undefined.');\n}\n\nconst videoUrl = movieData.url;\nconst videoDuration = Number(movieData.duration);\nconst musicUrl = $('Webhook').first().json.body[0].music;\n\nconst audioDetails = $('Get duration of voices').all();\nconst audioStarting = $('prepare body for jsontovideo to set video').all();\n\n// Validate audio data\nif (!audioDetails || audioDetails.length === 0) {\n  throw new Error('PIPELINE ERROR: No audio details from \"Get duration of voices\"');\n}\nif (!audioStarting || audioStarting.length === 0 || !audioStarting[0].json.scenes) {\n  throw new Error('PIPELINE ERROR: No audio starting times from \"prepare body for jsontovideo to set video\"');\n}\n\n// durations from API\nconst durations = audioDetails.map(item => {\n  const dur = item.json.data?.duration;\n  if (dur === undefined) {\n    throw new Error('PIPELINE ERROR: Audio item missing duration');\n  }\n  return dur;\n});\n\n// extract start times from scenes\nconst starts = audioStarting[0].json.scenes[0].elements\n  .filter(el => el.type === 'audio')\n  .map(el => el.start);\n\nreturn [\n  {\n    json: {\n      videoUrl,\n      musicUrl,\n      durations,\n      starts,\n      videoDuration\n    }\n  }\n];\n"
-        },
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          85584,
-          29648
-        ],
-        "id": "2b131b50-6524-4e9f-877c-732f1ba94016",
-        "name": "get video metadata to add music"
-      },
-      {
-        "parameters": {
-          "method": "POST",
-          "url": "https://api.json2video.com/v2/movies",
-          "authentication": "genericCredentialType",
-          "genericAuthType": "httpHeaderAuth",
-          "sendBody": true,
-          "contentType": "raw",
-          "rawContentType": "scenes",
-          "body": "={{ $json}}",
-          "options": {}
-        },
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.3,
-        "position": [
-          86032,
-          29648
-        ],
-        "id": "bb155957-fa48-4f53-a614-120cc5ebb80f",
-        "name": "Call jsontovideo to render",
-        "credentials": {
-          "httpHeaderAuth": {
-            "id": "ZmaCE8owCz8ioHlO",
-            "name": "json2video"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "conditions": {
-            "options": {
-              "version": 2,
-              "leftValue": "",
-              "caseSensitive": true,
-              "typeValidation": "loose"
-            },
-            "conditions": [
-              {
-                "id": "cond1-success-true",
-                "leftValue": "={{ $json.movie.success }}",
-                "rightValue": true,
-                "operator": {
-                  "type": "boolean",
-                  "operation": "equals"
-                }
-              }
-            ],
-            "combinator": "and"
-          },
-          "looseTypeValidation": true,
-          "options": {}
-        },
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 2.2,
-        "position": [
-          86704,
-          29648
-        ],
-        "id": "ce04738d-8506-4d61-b84d-173e4cf8c121",
-        "name": "if task is done go otherwise wait"
-      },
-      {
-        "parameters": {
-          "jsCode": "// ============================================================\n// Prepare body for jsontovideo to render video\n// Adds ONLY music track with ducking - no text overlays\n// Video volume = 1 to preserve narration from previous render\n// ============================================================\n\nconst inputData = $input.first().json;\n\n// VALIDATION\nif (!inputData.videoUrl) {\n  throw new Error('VIDEO_URL_MISSING: videoUrl is undefined.');\n}\nif (!inputData.videoDuration || isNaN(inputData.videoDuration)) {\n  throw new Error('VIDEO_DURATION_MISSING: videoDuration is ' + inputData.videoDuration);\n}\nif (!inputData.musicUrl) {\n  throw new Error('MUSIC_URL_MISSING: musicUrl is undefined.');\n}\nif (!inputData.durations || !inputData.starts) {\n  throw new Error('AUDIO_DATA_MISSING: durations or starts array is undefined.');\n}\n\nconst videoUrl = inputData.videoUrl;\nconst musicUrl = inputData.musicUrl;\nconst durations = inputData.durations;\nconst starts = inputData.starts;\nconst videoDuration = Number(inputData.videoDuration);\n\n// Music volume settings\nconst MUSIC_HIGH = 0.8;\nconst MUSIC_LOW = 0.15;\nconst FADE_TIME = 0.5;\nconst MUSIC_TRACK_DURATION = 90;\n\nlet musicTimeline = [];\nlet currentTime = 0;\nlet musicOffset = 0;\n\n// Build music timeline with ducking during voice segments\nfor (let i = 0; i < starts.length; i++) {\n  const voiceStart = starts[i];\n  const voiceDuration = durations[i];\n  const voiceEnd = voiceStart + voiceDuration;\n\n  // High-volume music during gaps (before voice)\n  if (voiceStart > currentTime) {\n    const gapDuration = voiceStart - currentTime;\n    musicTimeline.push({\n      type: 'audio',\n      src: musicUrl,\n      start: currentTime,\n      seek: musicOffset % MUSIC_TRACK_DURATION,\n      duration: gapDuration,\n      volume: MUSIC_HIGH,\n      'fade-out': FADE_TIME\n    });\n    musicOffset += gapDuration;\n  }\n\n  // Low-volume music during voice (ducked)\n  musicTimeline.push({\n    type: 'audio',\n    src: musicUrl,\n    start: voiceStart,\n    seek: musicOffset % MUSIC_TRACK_DURATION,\n    duration: voiceDuration,\n    volume: MUSIC_LOW,\n    'fade-in': FADE_TIME,\n    'fade-out': FADE_TIME\n  });\n  musicOffset += voiceDuration;\n  currentTime = voiceEnd;\n}\n\n// Remaining music after last voice\nif (currentTime < videoDuration) {\n  const remainingDuration = videoDuration - currentTime;\n  musicTimeline.push({\n    type: 'audio',\n    src: musicUrl,\n    start: currentTime,\n    seek: musicOffset % MUSIC_TRACK_DURATION,\n    duration: remainingDuration,\n    volume: MUSIC_HIGH,\n    'fade-in': FADE_TIME,\n    'fade-out': 1.0\n  });\n}\n\n// Build final json2video payload\n// NOTE: video volume = 1 to PRESERVE NARRATION from previous render!\nconst payload = {\n  width: 1080,\n  height: 1920,\n  quality: 'high',\n  resolution: 'custom',\n  scenes: [\n    {\n      elements: [\n        {\n          type: 'video',\n          src: videoUrl,\n          volume: 1  // IMPORTANT: Keep narration audio!\n        },\n        ...musicTimeline\n      ]\n    }\n  ]\n};\n\nreturn [{ json: payload }];\n"
-        },
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          85808,
-          29648
-        ],
-        "id": "3b77d61f-9dda-4d96-aeab-8f9bdf2eade1",
-        "name": "Prepare body for jsontovideo to render video"
-      },
-      {
-        "parameters": {
-          "httpMethod": "POST",
-          "path": "db085427-02a1-4f47-9934-9c258aa929b3",
-          "options": {}
-        },
-        "type": "n8n-nodes-base.webhook",
-        "typeVersion": 2.1,
-        "position": [
-          77152,
-          29760
-        ],
-        "id": "161e7300-d90f-43fc-94dc-457cd14e976a",
-        "name": "Webhook",
-        "webhookId": "db085427-02a1-4f47-9934-9c258aa929b3"
-      }
-    ],
-    "connections": {
-      "Output final video": {
-        "main": [
-          [
-            {
-              "node": "🎉 Send video URL",
-              "type": "main",
-              "index": 0
-            },
-            {
-              "node": "HTTP Request",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "json2video - Edit video1": {
-        "main": [
-          [
-            {
-              "node": "10 sec1",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Check Errors ": {
-        "main": [
-          [
-            {
-              "node": "Output final video",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "10 sec1",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Format variables for final editing1": {
-        "main": [
-          [
-            {
-              "node": "json2video - Edit video1",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "10 sec1": {
-        "main": [
-          [
-            {
-              "node": "caption generation",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "10 sec3": {
-        "main": [
-          [
-            {
-              "node": "Get merged video Status",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Wait 30 sec1": {
-        "main": [
-          [
-            {
-              "node": "Get image from kie",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "30 sec2": {
-        "main": [
-          [
-            {
-              "node": "Get video status",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Separate image data": {
-        "main": [
-          [
-            {
-              "node": "Create task on kie to optimize images",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "caption generation": {
-        "main": [
-          [
-            {
-              "node": "Check Errors ",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Convert text to speech": {
-        "main": [
-          [
-            {
-              "node": "Upload Speech To S3",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Get final video status": {
-        "main": [
-          [
-            {
-              "node": "if task is done go otherwise wait",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "30 sec": {
-        "main": [
-          [
-            {
-              "node": "Get final video status",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Wait 30 sec3": {
-        "main": [
-          [
-            {
-              "node": "Get Kie Video Urls",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "30 sec3": {
-        "main": [
-          [
-            {
-              "node": "Get Video from Jsontovideo",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Make Optimized Images Array from Nano-banana": {
-        "0": [
-          [
-            {
-              "node": "Split the Script by double newline",
-              "type": "0",
-              "index": 0
-            }
-          ]
-        ],
-        "main": [
-          [
-            {
-              "node": "Prepare Body for GPT To Analyze Images",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Standerdize Response": {
-        "main": [
-          [
-            {
-              "node": "If Status is Success Go Otherwise Wait",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Get image from kie": {
-        "main": [
-          [
-            {
-              "node": "Standerdize Response",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Create task on kie to optimize images": {
-        "main": [
-          [
-            {
-              "node": "Wait 30 sec1",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If Status is Success Go Otherwise Wait": {
-        "main": [
-          [
-            {
-              "node": "Make Optimized Images Array from Nano-banana",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Wait 30 sec1",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Prepare Body for GPT To Analyze Images": {
-        "main": [
-          [
-            {
-              "node": "Call Open AI To Analyze Images And Generate Script Accordingly",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Call Open AI To Analyze Images And Generate Script Accordingly": {
-        "main": [
-          [
-            {
-              "node": "Split the Script by double newline",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Split the Script by double newline": {
-        "main": [
-          [
-            {
-              "node": "Convert text to speech",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Upload Speech To S3": {
-        "main": [
-          [
-            {
-              "node": "Get duration of voices",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Call Kie Api Kling Model to Generate image to video": {
-        "main": [
-          [
-            {
-              "node": "Wait 30 sec3",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Prepare Body for Kie API (Kling model to generate video)": {
-        "main": [
-          [
-            {
-              "node": "Call Kie Api Kling Model to Generate image to video",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Get Kie Video Urls": {
-        "main": [
-          [
-            {
-              "node": "Standerdized Response",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Standerdized Response": {
-        "main": [
-          [
-            {
-              "node": "If Status is Success Go Otherwise Wait1",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If Status is Success Go Otherwise Wait1": {
-        "main": [
-          [
-            {
-              "node": "Seprate All Video Urls Generatad from Kei",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Wait 30 sec3",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Get Video from Jsontovideo": {
-        "main": [
-          [
-            {
-              "node": "If status is done go otherwise wait",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Render Kie videos in json2video (full duration)": {
-        "main": [
-          [
-            {
-              "node": "30 sec3",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If status is done go otherwise wait": {
-        "main": [
-          [
-            {
-              "node": "Make body for jsontovideo Api to merge videos clips",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "30 sec3",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Make body for jsontovideo Api to merge videos clips": {
-        "main": [
-          [
-            {
-              "node": "Call Jsontovideo API to merge clips",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Call Jsontovideo API to merge clips": {
-        "main": [
-          [
-            {
-              "node": "10 sec3",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Get merged video Status": {
-        "main": [
-          [
-            {
-              "node": "If status is done go otherwise wait1",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If status is done go otherwise wait1": {
-        "main": [
-          [
-            {
-              "node": "prepare body for jsontovideo to set video",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "10 sec3",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "prepare body for jsontovideo to set video": {
-        "main": [
-          [
-            {
-              "node": "Call Jsontovideo to create task",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Call Jsontovideo to create task": {
-        "main": [
-          [
-            {
-              "node": "30 sec2",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Get video status": {
-        "main": [
-          [
-            {
-              "node": "If Task is Status is done go otherwise wait",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If Task is Status is done go otherwise wait": {
-        "main": [
-          [
-            {
-              "node": "get video metadata to add music",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "30 sec2",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "get video metadata to add music": {
-        "main": [
-          [
-            {
-              "node": "Prepare body for jsontovideo to render video",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Call jsontovideo to render": {
-        "main": [
-          [
-            {
-              "node": "30 sec",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "if task is done go otherwise wait": {
-        "main": [
-          [
-            {
-              "node": "Format variables for final editing1",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "30 sec",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Prepare body for jsontovideo to render video": {
-        "main": [
-          [
-            {
-              "node": "Call jsontovideo to render",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Webhook": {
-        "main": [
-          [
-            {
-              "node": "Separate image data",
-              "type": "main",
-              "index": 0
-            },
-            {
-              "node": "save execution id to db",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Get duration of voices": {
-        "main": [
-          [
-            {
-              "node": "Prepare Body for Kie API (Kling model to generate video)",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Seprate All Video Urls Generatad from Kei": {
-        "main": [
-          [
-            {
-              "node": "Render Kie videos in json2video (full duration)",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      }
+      ]
     },
-    "authors": "Shawheen Nabizadeh",
-    "name": null,
-    "description": null,
-    "autosaved": false,
-    "workflowPublishHistory": [
-      {
-        "createdAt": "2026-01-16T07:34:01.621Z",
-        "id": 741,
-        "workflowId": "Qo2sirL0cDI2fVNQMJ5Eq",
-        "versionId": "1fddadf9-828e-4da4-951f-bf3119ff4e63",
-        "event": "activated",
-        "userId": "92d3fbdb-a49c-432b-b35c-b3d875346f08"
-      }
-    ]
-  }
+    "json2video - Edit video1": {
+      "main": [
+        [
+          {
+            "node": "10 sec1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Errors ": {
+      "main": [
+        [
+          {
+            "node": "Output final video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "10 sec1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format variables for final editing1": {
+      "main": [
+        [
+          {
+            "node": "json2video - Edit video1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10 sec1": {
+      "main": [
+        [
+          {
+            "node": "caption generation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10 sec3": {
+      "main": [
+        [
+          {
+            "node": "Get merged video Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 30 sec1": {
+      "main": [
+        [
+          {
+            "node": "Get image from kie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "30 sec2": {
+      "main": [
+        [
+          {
+            "node": "Get video status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separate image data": {
+      "main": [
+        [
+          {
+            "node": "Create task on kie to optimize images",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "caption generation": {
+      "main": [
+        [
+          {
+            "node": "Check Errors ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert text to speech": {
+      "main": [
+        [
+          {
+            "node": "Upload Speech To S3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get final video status": {
+      "main": [
+        [
+          {
+            "node": "if task is done go otherwise wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "30 sec": {
+      "main": [
+        [
+          {
+            "node": "Get final video status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 30 sec3": {
+      "main": [
+        [
+          {
+            "node": "Get Kie Video Urls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "30 sec3": {
+      "main": [
+        [
+          {
+            "node": "Get Video from Jsontovideo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Make Optimized Images Array from Nano-banana": {
+      "0": [
+        [
+          {
+            "node": "Split the Script by double newline",
+            "type": "0",
+            "index": 0
+          }
+        ]
+      ],
+      "main": [
+        [
+          {
+            "node": "Prepare Body for GPT To Analyze Images",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Standerdize Response": {
+      "main": [
+        [
+          {
+            "node": "If Status is Success Go Otherwise Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get image from kie": {
+      "main": [
+        [
+          {
+            "node": "Standerdize Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create task on kie to optimize images": {
+      "main": [
+        [
+          {
+            "node": "Wait 30 sec1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Status is Success Go Otherwise Wait": {
+      "main": [
+        [
+          {
+            "node": "Make Optimized Images Array from Nano-banana",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 30 sec1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Body for GPT To Analyze Images": {
+      "main": [
+        [
+          {
+            "node": "Call Open AI To Analyze Images And Generate Script Accordingly",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Open AI To Analyze Images And Generate Script Accordingly": {
+      "main": [
+        [
+          {
+            "node": "Split the Script by double newline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split the Script by double newline": {
+      "main": [
+        [
+          {
+            "node": "Convert text to speech",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Speech To S3": {
+      "main": [
+        [
+          {
+            "node": "Get duration of voices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Kie Api Kling Model to Generate image to video": {
+      "main": [
+        [
+          {
+            "node": "Wait 30 sec3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Body for Kie API (Kling model to generate video)": {
+      "main": [
+        [
+          {
+            "node": "Call Kie Api Kling Model to Generate image to video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Kie Video Urls": {
+      "main": [
+        [
+          {
+            "node": "Standerdized Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Standerdized Response": {
+      "main": [
+        [
+          {
+            "node": "If Status is Success Go Otherwise Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Status is Success Go Otherwise Wait1": {
+      "main": [
+        [
+          {
+            "node": "Seprate All Video Urls Generatad from Kei",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 30 sec3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Video from Jsontovideo": {
+      "main": [
+        [
+          {
+            "node": "If status is done go otherwise wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render Kie videos in json2video (full duration)": {
+      "main": [
+        [
+          {
+            "node": "30 sec3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If status is done go otherwise wait": {
+      "main": [
+        [
+          {
+            "node": "Make body for jsontovideo Api to merge videos clips",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "30 sec3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Make body for jsontovideo Api to merge videos clips": {
+      "main": [
+        [
+          {
+            "node": "Call Jsontovideo API to merge clips",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Jsontovideo API to merge clips": {
+      "main": [
+        [
+          {
+            "node": "10 sec3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get merged video Status": {
+      "main": [
+        [
+          {
+            "node": "If status is done go otherwise wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If status is done go otherwise wait1": {
+      "main": [
+        [
+          {
+            "node": "prepare body for jsontovideo to set video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "10 sec3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "prepare body for jsontovideo to set video": {
+      "main": [
+        [
+          {
+            "node": "Call Jsontovideo to create task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Jsontovideo to create task": {
+      "main": [
+        [
+          {
+            "node": "30 sec2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get video status": {
+      "main": [
+        [
+          {
+            "node": "If Task is Status is done go otherwise wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Task is Status is done go otherwise wait": {
+      "main": [
+        [
+          {
+            "node": "get video metadata to add music",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "30 sec2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get video metadata to add music": {
+      "main": [
+        [
+          {
+            "node": "Prepare body for jsontovideo to render video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call jsontovideo to render": {
+      "main": [
+        [
+          {
+            "node": "30 sec",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "if task is done go otherwise wait": {
+      "main": [
+        [
+          {
+            "node": "Format variables for final editing1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "30 sec",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare body for jsontovideo to render video": {
+      "main": [
+        [
+          {
+            "node": "Call jsontovideo to render",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Separate image data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "save execution id to db",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get duration of voices": {
+      "main": [
+        [
+          {
+            "node": "Prepare Body for Kie API (Kling model to generate video)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seprate All Video Urls Generatad from Kei": {
+      "main": [
+        [
+          {
+            "node": "Render Kie videos in json2video (full duration)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "823e7bd3-0c9f-4e02-baaa-1b9aa9859e4b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9d8070f4e4eea724c46861a3628a948aa7192e8d78ceb7905a111c5bac6c1be3"
+  },
+  "id": "Qo2sirL0cDI2fVNQMJ5Eq",
+  "tags": []
 }

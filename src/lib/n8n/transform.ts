@@ -25,9 +25,10 @@ const SECTION_TO_ROOM_MAPPING: Record<ScriptSectionType, RoomType[]> = {
  * Uses fallback logic when a section has no matching images.
  *
  * Algorithm:
- * 1. For each section, find images with matching room types
- * 2. If no matches, try fallback to "other" room type
- * 3. If still no matches, reuse the best available image (exterior preferred)
+ * 1. OPENING always gets first 2 images (or 1 if only 1 exists) - regardless of room type
+ * 2. For remaining sections, find images with matching room types
+ * 3. If no matches, try fallback to "other" room type
+ * 4. If still no matches, reuse the best available image (exterior preferred)
  *
  * @param images - All wizard images sorted by order
  * @param sections - Script sections
@@ -43,11 +44,23 @@ export function mapImagesToSections(
   // Sort images by order for consistent assignment
   const sortedImages = [...images].sort((a, b) => a.order - b.order);
 
-  // First pass: assign images to sections based on room type
+  // OPENING ALWAYS GETS FIRST 2 IMAGES (or 1 if only 1 exists)
+  // This ensures opening narration describes the first images the viewer sees
+  const openingSection = sections.find(s => s.type === 'opening');
+  if (openingSection && sortedImages.length > 0) {
+    const openingImageCount = Math.min(2, sortedImages.length);
+    const openingImageIds = sortedImages.slice(0, openingImageCount).map(img => img.id);
+    mapping.set(openingSection.id, openingImageIds);
+    openingImageIds.forEach(id => usedImageIds.add(id));
+  }
+
+  // First pass: assign images to sections based on room type (skip opening - already handled)
   for (const section of sections) {
+    if (section.type === 'opening') continue; // Already handled above
+
     const preferredRoomTypes = SECTION_TO_ROOM_MAPPING[section.type];
     const matchingImages = sortedImages.filter(
-      (img) => preferredRoomTypes.includes(img.roomType)
+      (img) => preferredRoomTypes.includes(img.roomType) && !usedImageIds.has(img.id)
     );
 
     if (matchingImages.length > 0) {
