@@ -158,3 +158,45 @@ N8N_WEBHOOK_URL=
 | closing | near video end | Always last |
 
 **Verification**: Console should show `Section "opening": start=2s`
+
+### 2025-01-16: Closing Narration & Music Cut-off at End Card Fix
+
+**Problem**: Closing narration and music cut off at ~56 seconds in a 60-second video, leaving 4 seconds of silence before the video ends.
+
+**Root Cause**: The final edit created TWO separate scenes:
+1. Main video scene: `duration = movie.duration - 6` (cut last 6 seconds of audio)
+2. End card scene: `duration = 6` (separate scene with no audio from main video)
+
+The last 6 seconds of narration/music got cut because they were in the portion replaced by the silent end card scene.
+
+**n8n Workflow Fixes** (workflow ID: `Qo2sirL0cDI2fVNQMJ5Eq`):
+
+1. **`Format variables for final editing1`** node:
+   - Changed `video_duration` from `$json.movie.duration - 6` → `$json.movie.duration`
+   - Video now uses full duration (no longer subtracting 6 seconds)
+
+2. **`json2video - Edit video1`** node:
+   - Replaced two-scene structure with single-scene overlay approach
+   - Video plays at full duration with continuous audio
+   - White rectangle overlay fades in 6 seconds before end
+   - Agent branding (headshot, name, brand, phone, email) appear as overlays
+   - Fixed text elements: font properties now at top level (not nested in `settings`)
+   - Fixed font-size: now number (`64`) instead of string (`"64px"`)
+
+3. **`prepare body for jsontovideo to set video`** node:
+   - Added `END_CARD_DURATION = 6` constant
+   - Changed closing timing from `videoDuration - closingClip.duration - 1` to `videoDuration - closingClip.duration - END_CARD_DURATION`
+   - Closing narration now finishes right when end card overlay appears
+
+**Expected behavior after fix**:
+- Video plays full duration with continuous audio (narration + music)
+- At 6 seconds before end, white overlay fades in over the video
+- Agent branding appears on the overlay (headshot, name, brand, contact)
+- Closing narration finishes right as the overlay appears
+- Music continues during end card and fades out naturally at video end
+
+**Verification**:
+- No audio cut-off - music and narration play to the end
+- End card overlay appears smoothly 6 seconds before video ends
+- Closing narration finishes as the white overlay fades in
+- Agent name, brand, phone, and email all appear on end card
