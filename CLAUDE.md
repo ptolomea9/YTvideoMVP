@@ -114,3 +114,21 @@ N8N_WEBHOOK_URL=
 - Changed `TTS_WORDS_PER_MINUTE` from 120 → 150
 - Made GPT prompt stricter: 5-8 word sentences, no filler phrases
 - Reduced `max_tokens` to 500, `temperature` to 0.3
+
+### 2025-01-16: TTS Timing & Music Ducking Fixes
+
+**Problem**: Music ducking at wrong times - `starts` array (from timeline, sorted by image index) didn't match `durations` array (from raw TTS output, in frontend order). Also, section sorting was breaking narrative flow.
+
+**n8n Workflow Fixes** (workflow ID: `Qo2sirL0cDI2fVNQMJ5Eq`):
+
+1. **`prepare body for jsontovideo to set video`** node:
+   - Removed `sectionsWithAudio.sort()` that reordered sections by first image index
+   - Now respects frontend narrative order: `opening → outdoor → living → private → closing`
+   - Added `duration` property to each timeline audio element for downstream sync
+
+2. **`get video metadata to add music`** node:
+   - Changed `durations` source from raw TTS output to timeline elements
+   - Now both `starts` and `durations` come from same array, ensuring index alignment
+   - Music ducking now correctly quiets during narration segments
+
+**Verification**: Check console logs for "Section order (frontend)" and matching `Starts`/`Durations` arrays.
