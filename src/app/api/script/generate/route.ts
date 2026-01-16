@@ -147,17 +147,17 @@ const KLING_CLIP_DURATION = 5;
 
 /**
  * Words per minute for TTS narration.
- * Using 150 WPM for tighter, punchier narration that fits video length.
- * This accounts for natural pauses and ensures narration ends before video.
+ * Using 130 WPM for a natural, engaging pace.
+ * Audio timing is now handled by sectionImageMapping in n8n workflow.
  */
-const TTS_WORDS_PER_MINUTE = 150;
+const TTS_WORDS_PER_MINUTE = 130;
 
 /**
  * Maximum total words for entire script.
- * At 150 WPM, 100 words = 40 seconds of narration.
- * This ensures narration fits within typical video lengths.
+ * At 130 WPM, 250 words ≈ 115 seconds of narration.
+ * This allows rich, descriptive content for luxury properties.
  */
-const MAX_TOTAL_WORDS = 100;
+const MAX_TOTAL_WORDS = 250;
 
 /**
  * Calculate word budget for each section based on image count.
@@ -181,15 +181,18 @@ function calculateSectionWordBudgets(
     const imagesInSection = sectionGroups.get(config.type) || [];
     const imageCount = imagesInSection.length;
 
-    // Closing section has no images but needs ~4 seconds for CTA
+    // Closing section has no images but needs ~6 seconds for CTA
     const clipSeconds = config.type === "closing"
-      ? 4
+      ? 6
       : Math.max(imageCount * KLING_CLIP_DURATION, 0);
 
     // Calculate target words: seconds × (words per minute / 60)
     const exactWords = clipSeconds * (TTS_WORDS_PER_MINUTE / 60);
-    // Much tighter rounding - use floor and round to nearest 5
-    const targetWords = Math.floor(exactWords / 5) * 5 || 0;
+    // Round to nearest 5, with minimum of 10 for non-empty sections
+    const targetWords = Math.max(
+      Math.round(exactWords / 5) * 5,
+      imageCount > 0 || config.type === "closing" ? 15 : 0
+    );
 
     return {
       type: config.type,
@@ -206,7 +209,7 @@ function calculateSectionWordBudgets(
     const scaleFactor = MAX_TOTAL_WORDS / totalRawWords;
     return rawBudgets.map((budget) => ({
       ...budget,
-      targetWords: Math.floor(budget.targetWords * scaleFactor / 5) * 5 || 5,
+      targetWords: Math.max(Math.round(budget.targetWords * scaleFactor / 5) * 5, 10),
     }));
   }
 
@@ -286,29 +289,41 @@ export async function POST(request: NextRequest) {
     // Build the GPT-4 prompt with order-aware, timing-constrained approach
     const prompt = buildScriptPrompt(propertyData, sortedImages, wordBudgets);
 
-    // Call GPT-4 with lower temperature for more concise output
+    // Call GPT-4 for rich, engaging narration
     const response = await getOpenAI().chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: `You are a MINIMALIST luxury real estate video narrator. Write ULTRA-SHORT scripts.
+          content: `You are a luxury real estate video narrator creating compelling, descriptive scripts.
 
-CRITICAL RULES:
-- MAXIMUM ${MAX_TOTAL_WORDS} words total for entire script
-- Each sentence: 5-8 words ONLY
-- NO adjective stacking (use ONE adjective max)
-- NO filler phrases ("you'll find", "featuring", "boasting")
-- SHORT fragments are better than full sentences
-- Think: luxury magazine headlines, not paragraphs`,
+CRITICAL REQUIREMENTS:
+- EVERY section MUST have at least 50 characters (approximately 8-12 words minimum)
+- Opening section: Set an evocative scene, mention the location/neighborhood
+- Closing section: Strong call-to-action with the full property address
+- Stay under ${MAX_TOTAL_WORDS} words total
+
+STYLE GUIDELINES:
+- Write evocative, sensory-rich descriptions that paint a picture
+- Vary sentence length for rhythm: mix short punchy lines with flowing descriptions
+- Use vivid language that conveys lifestyle and emotion
+- Highlight architectural details, materials, and craftsmanship
+- Create a narrative arc that builds desire throughout the tour
+
+AVOID:
+- Generic phrases like "boasting", "featuring", "you'll love"
+- Repetitive sentence structures
+- Over-the-top superlatives without substance
+- Listing features without context
+- Sections shorter than 50 characters`,
         },
         {
           role: "user",
           content: prompt,
         },
       ],
-      max_tokens: 500, // Very reduced to force brevity
-      temperature: 0.3, // Lower for more concise, predictable output
+      max_tokens: 1500, // Allow for richer content
+      temperature: 0.7, // Higher for more creative, engaging output
     });
 
     const content = response.choices[0]?.message?.content;
@@ -437,34 +452,43 @@ function buildScriptPrompt(
   // Hard cap the total words
   const cappedTotalWords = Math.min(totalWords, MAX_TOTAL_WORDS);
 
-  return `ULTRA-SHORT narration for property video. MAXIMUM ${cappedTotalWords} WORDS TOTAL.
+  return `Create an engaging narration for a luxury property video tour. Target: ~${cappedTotalWords} words total.
 
-**PROPERTY:** ${property.address}, ${property.city} | ${formatPrice(property.price)} | ${property.beds}bd/${property.baths}ba
+**PROPERTY:**
+${property.address}, ${property.city}, ${property.state}
+${formatPrice(property.price)} | ${property.beds} bed, ${property.baths} bath | ${property.sqft.toLocaleString()} sq ft
+${property.description ? `Description: ${property.description}` : ""}
 ${neighborhoodPOIs}${agentContact}
 
-**IMAGES:** ${sortedImages.length} total
+**IMAGE SEQUENCE:** (${sortedImages.length} images, shown in this order)
 ${imageSequence}
 
-**⚠️ HARD WORD LIMITS (DO NOT EXCEED):**
-TOTAL: ${cappedTotalWords} words maximum
+**SECTION WORD TARGETS:**
 ${scriptStructure}
 
-**STYLE:**
-- 5-8 word sentences ONLY
-- One adjective per noun MAX
-- Fragments OK: "Stunning views." "Chef's kitchen."
-- NO: "You'll love the..." "Featuring..." "Boasting..."
+**NARRATIVE FLOW:**
+- Opening: Set the scene, establish location and first impression
+- Outdoor: Capture the lifestyle - entertaining, relaxation, views
+- Living: Guide through the heart of the home - flow, light, details
+- Private: Create intimacy - retreat, comfort, personal sanctuary
+- Closing: Strong call to action with property address
 
-**OUTPUT (JSON only):**
+**TRANSITIONS:**
+${transitionGuidelines}
+
+**MINIMUM LENGTH REQUIREMENT:**
+⚠️ EVERY section MUST be at least 50 characters. Sections under 50 characters will fail validation.
+
+**OUTPUT FORMAT (JSON only):**
 {
   "sections": [
-    {"type": "opening", "content": "[${wordBudgets.find(b => b.type === "opening")?.targetWords || 10} words MAX]"},
-    {"type": "outdoor", "content": "[${wordBudgets.find(b => b.type === "outdoor")?.targetWords || 5} words MAX]"},
-    {"type": "living", "content": "[${wordBudgets.find(b => b.type === "living")?.targetWords || 10} words MAX]"},
-    {"type": "private", "content": "[${wordBudgets.find(b => b.type === "private")?.targetWords || 10} words MAX]"},
-    {"type": "closing", "content": "[${wordBudgets.find(b => b.type === "closing")?.targetWords || 10} words MAX]"}
+    {"type": "opening", "content": "At least 50 chars - set the scene with location..."},
+    {"type": "outdoor", "content": "At least 50 chars - describe outdoor lifestyle..."},
+    {"type": "living", "content": "At least 50 chars - guide through living spaces..."},
+    {"type": "private", "content": "At least 50 chars - create intimacy in private areas..."},
+    {"type": "closing", "content": "At least 50 chars - call to action with full address..."}
   ]
 }
 
-Empty sections: "Moving on..." (3 words max).`;
+For sections with no images, still write at least 50 characters as a smooth transition.`;
 }
