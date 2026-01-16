@@ -340,8 +340,9 @@ export function WizardProvider({ children }: { children: ReactNode }) {
     (step: WizardStep): boolean => {
       switch (step) {
         case WizardStep.DATA: {
-          const { address, city, state: stateCode, propertyType } = state.propertyData;
-          return Boolean(address && city && stateCode && propertyType);
+          const { address, city, state: stateCode, propertyType, agentPhotoUrl } = state.propertyData;
+          // Headshot is required for the video end card
+          return Boolean(address && city && stateCode && propertyType && agentPhotoUrl);
         }
         case WizardStep.UPLOAD:
           // Require minimum images for video generation (one per script section)

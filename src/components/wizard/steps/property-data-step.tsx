@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, KeyboardEvent, useImperativeHandle, forwardRef, useRef, ChangeEvent } from "react";
+import { useState, useCallback, KeyboardEvent, useImperativeHandle, forwardRef, useRef, ChangeEvent, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -129,8 +129,43 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
     const [agentPhotoUrl, setAgentPhotoUrl] = useState<string | undefined>(state.propertyData.agentPhotoUrl);
     const [isUploadingLogo, setIsUploadingLogo] = useState(false);
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+    const [isLoadingBranding, setIsLoadingBranding] = useState(true);
     const logoInputRef = useRef<HTMLInputElement>(null);
     const photoInputRef = useRef<HTMLInputElement>(null);
+
+    // Load saved branding from user profile on mount
+    useEffect(() => {
+      async function loadSavedBranding() {
+        try {
+          const response = await fetch("/api/branding/profile");
+          if (response.ok) {
+            const data = await response.json();
+            // Only set if not already set from wizard state
+            if (data.headshot_url && !agentPhotoUrl) {
+              setAgentPhotoUrl(data.headshot_url);
+            }
+            if (data.logo_url && !agentLogoUrl) {
+              setAgentLogoUrl(data.logo_url);
+            }
+            // Also populate agent info if saved
+            if (data.agent_name && !state.propertyData.agentName) {
+              setValue("agentName", data.agent_name);
+            }
+            if (data.agent_phone && !state.propertyData.agentPhone) {
+              setValue("agentPhone", data.agent_phone);
+            }
+            if (data.agent_email && !state.propertyData.agentEmail) {
+              setValue("agentEmail", data.agent_email);
+            }
+          }
+        } catch (error) {
+          console.error("Error loading saved branding:", error);
+        } finally {
+          setIsLoadingBranding(false);
+        }
+      }
+      loadSavedBranding();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const propertyType = watch("propertyType");
     const lotSizeUnit = watch("lotSizeUnit");
@@ -225,13 +260,17 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
 
     /**
      * Expose validation and submit methods to parent.
+     * Headshot is required for the video end card.
      */
     useImperativeHandle(
       ref,
       () => ({
-        isValid: () => isValid,
+        isValid: () => isValid && Boolean(agentPhotoUrl),
         submitForm: async () => {
           const valid = await trigger();
+          if (!agentPhotoUrl) {
+            return false; // Headshot required
+          }
           if (valid) {
             handleSubmit(onSubmit)();
             return true;
@@ -239,7 +278,7 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
           return false;
         },
       }),
-      [isValid, trigger, handleSubmit, onSubmit]
+      [isValid, trigger, handleSubmit, onSubmit, agentPhotoUrl]
     );
 
     /**
@@ -541,9 +580,60 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
 
           {/* Logo & Photo Uploads */}
           <div className="space-y-2">
-            <Label>Logo & Headshot (Optional)</Label>
+            <Label>
+              Headshot <span className="text-destructive">*</span> & Logo <span className="text-muted-foreground text-xs">(optional)</span>
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Your headshot appears on the video end card. Once uploaded, it&apos;s saved for future videos.
+            </p>
             <div className="grid grid-cols-2 gap-4">
-              {/* Logo Upload */}
+              {/* Photo Upload - Required */}
+              <div
+                className={`group relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 transition-colors cursor-pointer min-h-[120px] ${
+                  !agentPhotoUrl && !isLoadingBranding
+                    ? "border-destructive/50 bg-destructive/5 hover:border-destructive hover:bg-destructive/10"
+                    : "border-border bg-muted/30 hover:border-primary/50 hover:bg-muted/50"
+                }`}
+                onClick={() => photoInputRef.current?.click()}
+              >
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => handleFileChange(e, "photo")}
+                />
+                {isUploadingPhoto || isLoadingBranding ? (
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                ) : agentPhotoUrl ? (
+                  <div className="relative w-20 h-20">
+                    <Image
+                      src={agentPhotoUrl}
+                      alt="Agent headshot"
+                      fill
+                      className="object-cover rounded-full"
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAgentPhotoUrl(undefined);
+                      }}
+                      className="absolute -top-2 -right-2 rounded-full bg-destructive p-1 text-destructive-foreground hover:bg-destructive/80"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="h-6 w-6 text-destructive/70 mb-2" />
+                    <span className="text-sm text-destructive/70 font-medium">Headshot *</span>
+                    <span className="text-xs text-muted-foreground">Required</span>
+                  </>
+                )}
+              </div>
+
+              {/* Logo Upload - Optional */}
               <div
                 className="group relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/30 p-4 transition-colors hover:border-primary/50 hover:bg-muted/50 cursor-pointer min-h-[120px]"
                 onClick={() => logoInputRef.current?.click()}
@@ -580,47 +670,7 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
                   <>
                     <Upload className="h-6 w-6 text-muted-foreground mb-2" />
                     <span className="text-sm text-muted-foreground">Logo</span>
-                  </>
-                )}
-              </div>
-
-              {/* Photo Upload */}
-              <div
-                className="group relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/30 p-4 transition-colors hover:border-primary/50 hover:bg-muted/50 cursor-pointer min-h-[120px]"
-                onClick={() => photoInputRef.current?.click()}
-              >
-                <input
-                  ref={photoInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={(e) => handleFileChange(e, "photo")}
-                />
-                {isUploadingPhoto ? (
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                ) : agentPhotoUrl ? (
-                  <div className="relative w-20 h-20">
-                    <Image
-                      src={agentPhotoUrl}
-                      alt="Agent headshot"
-                      fill
-                      className="object-cover rounded-full"
-                    />
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setAgentPhotoUrl(undefined);
-                      }}
-                      className="absolute -top-2 -right-2 rounded-full bg-destructive p-1 text-destructive-foreground hover:bg-destructive/80"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <Upload className="h-6 w-6 text-muted-foreground mb-2" />
-                    <span className="text-sm text-muted-foreground">Photo</span>
+                    <span className="text-xs text-muted-foreground">Optional</span>
                   </>
                 )}
               </div>

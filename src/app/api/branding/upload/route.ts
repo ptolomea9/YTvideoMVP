@@ -90,9 +90,23 @@ export async function POST(request: NextRequest) {
       .from("listing-images")
       .getPublicUrl(data.path);
 
+    const publicUrl = urlData.publicUrl;
+
+    // Save to user profile for persistence across sessions
+    const existingBranding = (user.user_metadata?.branding as Record<string, string>) || {};
+    const brandingUpdate = {
+      ...existingBranding,
+      [type === "photo" ? "headshot_url" : "logo_url"]: publicUrl,
+    };
+
+    await supabase.auth.updateUser({
+      data: { branding: brandingUpdate },
+    });
+
     return NextResponse.json({
-      url: urlData.publicUrl,
+      url: publicUrl,
       type,
+      persisted: true,
     });
   } catch (error) {
     console.error("Branding upload error:", error);
