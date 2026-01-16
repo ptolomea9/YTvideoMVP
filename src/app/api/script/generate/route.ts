@@ -147,10 +147,10 @@ const KLING_CLIP_DURATION = 5;
 
 /**
  * Words per minute for TTS narration.
- * Using 120 WPM (conservative) to account for slower voices.
- * Some voices speak at ~128 WPM, so this prevents narration overrun.
+ * Using 130 WPM (balanced) - n8n handles voice speed variance with tiered adjustments.
+ * Range: fast voices ~157 WPM, slow voices ~128 WPM (23% variance).
  */
-const TTS_WORDS_PER_MINUTE = 120;
+const TTS_WORDS_PER_MINUTE = 130;
 
 /**
  * Seconds reserved for end card (agent branding overlay).
@@ -159,10 +159,10 @@ const TTS_WORDS_PER_MINUTE = 120;
 const END_CARD_SECONDS = 8;
 
 /**
- * Default maximum total words for entire script.
- * This is overridden dynamically based on video duration in the POST handler.
+ * Maximum total words for entire script.
+ * Allows rich, descriptive narration - n8n handles voice speed variance.
  */
-const DEFAULT_MAX_TOTAL_WORDS = 150;
+const MAX_TOTAL_WORDS = 250;
 
 /**
  * Calculate word budget for each section based on image count.
@@ -289,17 +289,12 @@ export async function POST(request: NextRequest) {
       sectionGroups.get(sectionType)!.push(image);
     }
 
-    // Calculate video duration and dynamic word budget
-    // Formula: (videoDuration - END_CARD_SECONDS) × (WPM / 60)
+    // Calculate video duration - n8n handles voice speed variance with tiered adjustments
     const videoDuration = sortedImages.length * KLING_CLIP_DURATION;
-    const availableNarrationTime = videoDuration - END_CARD_SECONDS;
-    const calculatedMaxWords = Math.floor(availableNarrationTime * (TTS_WORDS_PER_MINUTE / 60));
-    // Cap at DEFAULT_MAX_TOTAL_WORDS to prevent excessively long scripts
-    const maxTotalWords = Math.min(DEFAULT_MAX_TOTAL_WORDS, Math.max(calculatedMaxWords, 60));
+    const maxTotalWords = MAX_TOTAL_WORDS;
 
     console.log(`Script generation: ${sortedImages.length} images × ${KLING_CLIP_DURATION}s = ${videoDuration}s video`);
-    console.log(`Narration time: ${availableNarrationTime}s (${END_CARD_SECONDS}s reserved for end card)`);
-    console.log(`Max words: ${maxTotalWords} (calculated: ${calculatedMaxWords}, cap: ${DEFAULT_MAX_TOTAL_WORDS})`);
+    console.log(`Max words: ${maxTotalWords} (n8n handles voice speed variance)`);
 
     // Calculate word budgets based on image counts per section
     const wordBudgets = calculateSectionWordBudgets(sectionGroups, maxTotalWords);
@@ -308,8 +303,8 @@ export async function POST(request: NextRequest) {
     const prompt = buildScriptPrompt(propertyData, sortedImages, wordBudgets, maxTotalWords, videoDuration);
 
     // Call GPT-4 for narration
-    // Lower temperature (0.4) for more consistent word counts
-    // Lower max_tokens (800) since scripts are now constrained to ~150 words
+    // Lower temperature (0.4) for consistent word counts
+    // n8n handles voice speed variance with tiered adjustments, so allow richer scripts
     const response = await getOpenAI().chat.completions.create({
       model: "gpt-4o",
       messages: [
@@ -317,22 +312,22 @@ export async function POST(request: NextRequest) {
           role: "system",
           content: `You are a luxury real estate video narrator creating compelling, descriptive scripts.
 
-CRITICAL TIMING CONSTRAINT:
+TIMING GUIDELINE:
 - This is a ${videoDuration}-second video with ${END_CARD_SECONDS}s reserved for the end card
-- Total narration MUST be under ${maxTotalWords} words (approximately ${Math.floor(maxTotalWords / 2)} words per minute at 120 WPM)
-- Going over the word limit will cause narration to be cut off!
+- Target ~${maxTotalWords} words total (~130 words per minute speaking pace)
+- The backend handles voice speed variance, so focus on quality over strict word counts
 
 SECTION REQUIREMENTS:
-- EVERY section MUST have at least 40 characters
-- Each sentence should be 5-10 words maximum
-- Opening: Set the scene with location (15-25 words)
-- Closing: Call-to-action with address (15-20 words)
+- EVERY section MUST have at least 50 characters
+- Each sentence should be 8-15 words
+- Opening: Set the scene with location and first impression (30-50 words)
+- Closing: Strong call-to-action with property address (25-35 words)
 
 STYLE:
-- Evocative but concise descriptions
-- Short, punchy sentences
+- Rich, evocative descriptions that paint a picture
+- Varied sentence rhythm - mix short punchy with longer flowing
+- Highlight unique features and lifestyle benefits
 - No filler phrases ("boasting", "featuring", "you'll love")
-- Focus on what makes this property unique
 
 OUTPUT: JSON only with sections array`,
         },
@@ -341,7 +336,7 @@ OUTPUT: JSON only with sections array`,
           content: prompt,
         },
       ],
-      max_tokens: 800,
+      max_tokens: 1200,
       temperature: 0.4,
     });
 
