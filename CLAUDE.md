@@ -948,3 +948,76 @@ reorder by section → narration syncs to contiguous clip groups
 - [ ] No audio doubling at 0:11-0:20
 - [ ] Subtitles appear consistently throughout
 - [ ] End card fully visible with white background, centered content
+
+### 2025-01-17: Fix Audio Overlap - Speed-Adjusted Playback Duration
+
+**Problem** (Execution 8805): Audio clips overlapping at 0:12-0:14 despite previous fixes.
+
+**Evidence**:
+```
+Audio 1: start=2s, duration=11.886s, speed=1.3
+Audio 2: start=10s, duration=5.851s, speed=1.17
+```
+
+**Root Cause**: When calculating the next audio start time, the code did NOT account for speed-adjusted playback duration:
+- Audio 1 actual end = 2 + (11.886 / 1.3) = **11.14s**
+- Audio 2 starts at **10s** → OVERLAP from 10s to 11.14s
+
+The previous fix used `boundary.startTime` (based on clip indices) without ensuring the previous audio had finished playing.
+
+**n8n Workflow Fix** (workflow ID: `Qo2sirL0cDI2fVNQMJ5Eq`):
+
+**`prepare body for jsontovideo to set video`** node - Key changes:
+
+1. **New variable `previousAudioEndTime`** - tracks when each audio actually finishes:
+   ```javascript
+   let previousAudioEndTime = 0;
+   ```
+
+2. **Speed-adjusted duration calculation**:
+   ```javascript
+   const actualPlaybackDuration = actualDuration / speed;  // Speed > 1 = shorter
+   const endsAt = narrationStart + actualPlaybackDuration;
+   previousAudioEndTime = endsAt;  // Track for next iteration
+   ```
+
+3. **Overlap prevention using Math.max**:
+   ```javascript
+   // Middle sections: start at MAX(image boundary, previous audio end)
+   const imageBasedStart = boundary.startTime;
+   narrationStart = Math.max(imageBasedStart, previousAudioEndTime);
+   ```
+
+4. **Built-in overlap detection**:
+   ```javascript
+   // Verify no overlaps at end
+   for (let i = 1; i < audioElements.length; i++) {
+     const prev = audioElements[i-1];
+     const curr = audioElements[i];
+     const prevEnd = prev.start + (prev.duration / (prev.speed || 1));
+     if (curr.start < prevEnd) {
+       console.error(`OVERLAP DETECTED: Audio ${i-1} ends at ${prevEnd}s but Audio ${i} starts at ${curr.start}s`);
+     }
+   }
+   ```
+
+**Expected Console Output**:
+```
+Section "opening": ... narration start=2.0s, TTS=11.9s (speed: 1.30x), ends=11.1s
+Section "outdoor": ... narration start=11.1s, TTS=5.9s, ends=17.0s [DELAYED - prev audio still playing]
+Section "living": ... narration start=17.0s, TTS=6.2s, ends=23.2s
+```
+
+The `[DELAYED - prev audio still playing]` note appears when a section's narration is pushed later to avoid overlap.
+
+**Also Verified**: `json2video - Edit video1` node already correctly configured with:
+- Method: POST
+- URL: https://api.json2video.com/v2/movies
+- JSON body with subtitles (boxed-word style) and HTML end card (Tailwind CSS)
+
+**Verification**:
+- [ ] No audio overlap - each section starts AFTER previous ends
+- [ ] Console shows increasing start times (no overlap detection errors)
+- [ ] Subtitles appear throughout video (boxed-word style, yellow highlight)
+- [ ] End card appears at video_duration - 6 seconds with white background
+- [ ] End card shows: circular headshot, agent name, brand, phone, email
