@@ -244,6 +244,10 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
         });
 
         const response = await fetch(`/api/property/lookup?${params}`);
+        if (!response.ok) {
+          setLookupError(`Lookup failed: ${response.status}`);
+          return;
+        }
         const data: PropertyLookupResponse = await response.json();
 
         if (!data.success || !data.property) {

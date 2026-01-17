@@ -16,7 +16,17 @@
       "mcp__n8n-mcp__n8n_update_partial_workflow",
       "mcp__n8n-mcp__n8n_update_full_workflow",
       "mcp__n8n-mcp__n8n_test_workflow",
-      "Skill(n8n-validation-expert)"
+      "Skill(n8n-validation-expert)",
+      "Bash(python3:*)",
+      "mcp__n8n-mcp__tools_documentation",
+      "Bash(curl:*)",
+      "Bash(npm run dev)",
+      "Bash(timeout:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(powershell -Command \"Stop-Process -Id 20708 -Force; Stop-Process -Id 2592 -Force\")",
+      "Bash(git push)"
     ]
   }
 }
