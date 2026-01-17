@@ -839,3 +839,112 @@ Section "closing": clips 9-9 (45-50s), narration start=45.0s, TTS=5.2s, ends=50.
 - [ ] Each section's narration matches the images being displayed
 - [ ] Closing narration finishes before end card appears
 - [ ] No narration overlap between sections
+
+### 2025-01-16: Fix End Card Opacity & Image-Audio Synchronization
+
+**Problems**:
+1. End card barely visible - opacity too light
+2. Images jumbled with audio - narration talks about outdoor but video shows living room
+
+**Root Cause for Image-Audio Issue**:
+Videos finish processing at different times. The async `Get Video from Jsontovideo` node returns items in completion order (race condition), not original upload order. When the merge node did `videoUrls[imgIdx]`, it was getting the wrong video.
+
+**Solution**: Track original index through json2video's `client-data` field.
+
+**n8n Workflow Fixes** (workflow ID: `Qo2sirL0cDI2fVNQMJ5Eq`):
+
+1. **`json2video - Edit video1`** node - End card opacity:
+   - Added inline style `style='opacity:1;background:#FFFFFF'` to HTML div
+   - Changed `fade-in` from `0.5` to `0.8` for smoother transition
+
+2. **`Seprate All Video Urls Generatad from Kei`** node:
+   - Added `originalIndex: index` to output so each video carries its original position
+
+3. **`Render Kie videos in json2video (full duration)`** node:
+   - Added `client-data: { originalIndex: {{ $json.originalIndex }} }` field
+   - Per json2video docs, `client-data` is preserved in GET responses (unlike `comment`)
+
+4. **`Make body for jsontovideo Api to merge videos clips`** node:
+   - Added sorting logic at top to restore original order:
+   ```javascript
+   const itemsWithIndex = items.map((item, fallbackIndex) => {
+     const clientData = item.json.movie?.['client-data'];
+     const originalIndex = clientData?.originalIndex ?? fallbackIndex;
+     return { item, originalIndex };
+   });
+   itemsWithIndex.sort((a, b) => a.originalIndex - b.originalIndex);
+   const videoUrls = itemsWithIndex.map(x => x.item.json.movie.url);
+   ```
+   - Console logs `=== CLIP ORDER RESTORATION ===` with extracted indices
+
+**Data Flow After Fix**:
+```
+Kie videos → json2video render (with client-data.originalIndex) →
+async polling (items arrive in any order) →
+sort by client-data.originalIndex → restore upload order →
+reorder by section → narration syncs to contiguous clip groups
+```
+
+**Verification**:
+- [ ] End card has solid white background (fully opaque)
+- [ ] Console shows `Original indices extracted: 0, 1, 2, 3...` in correct sequence
+- [ ] Narration matches what's on screen (outdoor narration plays during outdoor images)
+- [ ] No audio-video desync
+
+### 2025-01-17: Fix Audio Doubling, Negative Speed & End Card Visibility
+
+**Problems** (Execution 8798):
+1. Audio doubling - narration overlaps at 0:11-0:20
+2. Negative speed - audio 4 has `speed: -13.218`
+3. End card translucent - barely visible white card
+4. Subtitles flicker - secondary effect of audio timing issues
+
+**Root Causes**:
+1. **Audio Index Mismatch**: Code used `audioClips[boundary.sectionIndex]` but after clip reordering, `sectionIndex` (frontend order) doesn't match the TTS audio order. Each section boundary was pulling from the wrong audio clip.
+2. **Negative Speed**: When closing section starts at 70s but `mustEndBy = 58s`, `availableTime = 58 - 70 = -12s`, causing `speed = duration / -12 = negative`.
+3. **End Card Layout**: `pt-[400px]` pushed content down 400px, and missing `justify-center` prevented vertical centering.
+
+**n8n Workflow Fixes** (workflow ID: `Qo2sirL0cDI2fVNQMJ5Eq`):
+
+1. **`prepare body for jsontovideo to set video`** node - Audio index fix:
+   ```javascript
+   // BEFORE (broken):
+   for (const boundary of sectionBoundaries) {
+     const audioClip = audioClips[boundary.sectionIndex];  // WRONG
+
+   // AFTER (fixed):
+   for (let i = 0; i < sectionBoundaries.length; i++) {
+     const boundary = sectionBoundaries[i];
+     const audioClip = audioClips[i];  // Use loop index
+   ```
+
+2. **`prepare body for jsontovideo to set video`** node - Negative speed guard:
+   ```javascript
+   } else if (boundary.sectionType === 'closing') {
+     narrationStart = boundary.startTime;
+     availableTime = mustEndBy - boundary.startTime;
+
+     // FIX: Guard against negative available time
+     if (availableTime <= 0) {
+       console.warn(`Closing starts at ${boundary.startTime}s but must end by ${mustEndBy}s`);
+       availableTime = actualDuration;  // Use actual duration, no speedup
+       narrationStart = Math.max(INTRO_SILENCE, mustEndBy - actualDuration);  // Start earlier
+     }
+   ```
+
+3. **`json2video - Edit video1`** node - End card HTML:
+   ```html
+   <!-- BEFORE (broken): -->
+   <div class='w-full h-full bg-white flex flex-col items-center pt-[400px]' ...>
+
+   <!-- AFTER (fixed): -->
+   <div class='w-full h-full bg-white flex flex-col items-center justify-center' ...>
+   ```
+
+**Verification**:
+- [ ] Audio elements should NOT overlap (each starts after previous ends)
+- [ ] No negative speed values in console logs
+- [ ] Console shows `Section "opening": start=2s`, then increasing times
+- [ ] No audio doubling at 0:11-0:20
+- [ ] Subtitles appear consistently throughout
+- [ ] End card fully visible with white background, centered content
