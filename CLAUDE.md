@@ -562,3 +562,185 @@ const payload = {
 - [ ] Email visible (gray #666666)
 - [ ] Headshot appears as circle, not square
 - [ ] No json2video API errors
+
+### 2025-01-16: Fix Narration-Image Synchronization (Hybrid Timing)
+
+**Problem**: Recent changes broke narration-image sync. Sections were placed sequentially, ignoring when their images actually appear on screen. Result: viewer sees outdoor images but hears living room narration.
+
+**The Critical Sync Rule**:
+```
+narrationStartTime = firstImageIndex × CLIP_DURATION (5s)
+```
+When image N appears at `N × 5` seconds, the narration describing that image should start.
+
+**Solution**: Hybrid timing approach in `prepare body for jsontovideo to set video` node:
+
+1. **Opening**: Always starts at 2s (INTRO_SILENCE) - viewer sees first images
+2. **Middle sections**: Start at `firstImageIndex × 5s` OR after previous ends (whichever is later)
+3. **Closing**: Calculates backwards from end card deadline, speeds up if needed (max 1.25x)
+
+**n8n Workflow Fix** (workflow ID: `Qo2sirL0cDI2fVNQMJ5Eq`):
+
+**`prepare body for jsontovideo to set video`** node - Key changes:
+
+```javascript
+// For each middle section:
+const imageStartTime = firstImageIndex * CLIP_DURATION;  // When images appear
+const sectionStart = Math.max(imageStartTime, currentTime);  // No overlap
+
+// For closing - speed up if needed to fit before end card:
+if (closingStart + playbackDuration > mustEndBy) {
+  const requiredSpeed = closingClip.duration / availableClosingTime;
+  closingSpeed = Math.min(requiredSpeed, MAX_CLOSING_SPEED);  // Cap at 1.25x
+}
+```
+
+**Console Logging** (for debugging):
+```
+Strategy: Hybrid timing - opening at 2s, middle synced to images, closing before end card
+Middle section order: outdoor(img2) -> living(img5) -> private(img8)
+Section "opening": start=2s (images 0-1), duration=8.5s
+Section "outdoor": firstImage=2, imageTime=10s, start=10.5s (sequential), duration=7.2s
+Section "living": firstImage=5, imageTime=25s, start=25s (image-synced), duration=6.8s
+Section "closing": start=48s, ends=53.5s, deadline=53.5s
+```
+
+**Why This Works**:
+1. **Maintains sync**: Narration starts when images appear (image-based timing)
+2. **No overlaps**: Uses `Math.max()` to prevent narration overlap
+3. **Protects closing**: Speeds up closing if it would bleed into end card
+4. **Preserves gaps**: Natural pauses between sections when narration is shorter than image display time
+
+**Verification**:
+- [ ] Opening narration plays while first images are on screen
+- [ ] Each section's narration matches the images being displayed
+- [ ] Closing narration finishes cleanly before end card fades in
+- [ ] No narration bleeding/garbling between sections
+- [ ] Natural pacing (brief pauses between sections OK)
+- [ ] Console shows `(image-synced)` or `(sequential)` for each section
+
+### 2025-01-16: Fix json2video Subtitles Missing Duration
+
+**Problem**: Video rendering fails with "Error rendering video" from json2video API.
+
+**Error**:
+```json
+{
+  "status": "error",
+  "message": "Error: Error rendering video",
+  "project": "egjbW72GKCtGoofw"
+}
+```
+
+**Root Cause**: The subtitles element in `json2video - Edit video1` node was missing the `duration` property:
+```json
+{
+  "type": "subtitles",
+  "start": 0,
+  "settings": {...}
+  // MISSING: duration
+}
+```
+
+Without a duration, json2video doesn't know when to stop rendering subtitles, causing rendering to fail.
+
+**n8n Workflow Fix** (workflow ID: `Qo2sirL0cDI2fVNQMJ5Eq`):
+
+**`json2video - Edit video1`** node:
+- Added `duration` property to subtitles element
+- Duration = `video_duration - 6` (subtitles stop when end card appears)
+
+**Before (broken)**:
+```json
+{
+  "type": "subtitles",
+  "start": 0,
+  "settings": {...}
+}
+```
+
+**After (fixed)**:
+```json
+{
+  "type": "subtitles",
+  "start": 0,
+  "duration": {{ Number($json.video_duration) - 6 }},
+  "settings": {...}
+}
+```
+
+**Verification**:
+- [ ] json2video API returns success (no "Error rendering video")
+- [ ] Subtitles appear throughout video
+- [ ] Subtitles stop when end card fades in (6 seconds before video ends)
+
+### 2025-01-16: Replace End Card with Single HTML Element
+
+**Problem**: End card used 6 separate json2video elements (white background, headshot with PNG mask, 4 text fields) requiring complex positioning and property quirks. This required 5+ iterations of fixes for issues like:
+- `position: "custom"` required for x/y coordinates
+- `mask` property requiring external PNG URL (not string values)
+- `font-color` inside `settings` vs `color` at top level
+- `resize: "cover"` ignoring width/height
+
+**Solution**: Replace 6 elements with 1 HTML element using Tailwind CSS.
+
+**n8n Workflow Fix** (workflow ID: `Qo2sirL0cDI2fVNQMJ5Eq`):
+
+**`json2video - Edit video1`** node:
+
+Removed these 6 elements:
+1. White background image (placehold.co)
+2. Headshot image (with PNG circle mask)
+3. Agent name text
+4. Brand name text
+5. Phone text
+6. Email text
+
+Added single HTML element:
+```json
+{
+  "type": "html",
+  "tailwindcss": true,
+  "html": "<div class='w-full h-full bg-white flex flex-col items-center justify-center'><img src='{{ $json.headshot_url }}' class='w-72 h-72 rounded-full object-cover mb-8 shadow-lg' /><h1 class='text-5xl font-bold text-gray-900 mb-2'>{{ $json.agent_name }}</h1><p class='text-2xl text-gray-500 mb-8'>{{ $json.brand_name }}</p><p class='text-3xl font-medium text-gray-800 mb-2'>{{ $json.phone }}</p><p class='text-xl text-gray-500'>{{ $json.email }}</p></div>",
+  "start": {{ Number($json.video_duration) - 6 }},
+  "duration": 6,
+  "x": 540,
+  "y": 960,
+  "width": 1080,
+  "fade-in": 0.5
+}
+```
+
+**Benefits**:
+| Before | After |
+|--------|-------|
+| 6 elements | 1 element |
+| PNG mask for circle headshot | CSS `rounded-full` |
+| Complex positioning with `position: "custom"` | Flexbox layout |
+| Multiple font property formats | Consistent Tailwind classes |
+
+**Tailwind Classes Used**:
+- `w-full h-full bg-white` - Full size white background
+- `flex flex-col items-center justify-center` - Center content vertically/horizontally
+- `w-72 h-72 rounded-full object-cover` - 300px circular headshot
+- `text-5xl font-bold text-gray-900` - Agent name styling
+- `shadow-lg` - Subtle shadow on headshot
+- `mb-8`, `mb-2` - Vertical spacing between elements
+
+**Final Scene Structure** (3 elements):
+```json
+"elements": [
+  { "type": "video", "src": "{{ $json.video }}" },
+  { "type": "subtitles", "start": 0, "duration": "...", "settings": {...} },
+  { "type": "html", "tailwindcss": true, "html": "...", "start": "...", "duration": 6 }
+]
+```
+
+**Circle Mask Removal**: The PNG mask at `https://qjkgsiqcqkkuhawuqvve.supabase.co/storage/v1/object/public/listing-images/assets/circle-mask.png` is no longer needed - CSS `rounded-full` handles circular cropping.
+
+**Verification**:
+- [ ] End card renders with white background
+- [ ] Headshot appears circular (CSS-based, no PNG mask)
+- [ ] Agent name, brand, phone, email all centered and visible
+- [ ] 0.5s fade-in animation works
+- [ ] No json2video API errors
