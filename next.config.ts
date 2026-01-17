@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   images: {
@@ -9,6 +10,10 @@ const nextConfig: NextConfig = {
         pathname: "/storage/v1/object/public/**",
       },
     ],
+  },
+  // Fix for multiple lockfiles - use this project's root
+  turbopack: {
+    root: path.resolve(__dirname),
   },
 };
 

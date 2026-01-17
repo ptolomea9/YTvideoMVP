@@ -26,7 +26,11 @@
       "Bash(findstr:*)",
       "Bash(taskkill:*)",
       "Bash(powershell -Command \"Stop-Process -Id 20708 -Force; Stop-Process -Id 2592 -Force\")",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(npx tsc:*)",
+      "Bash(xxd:*)",
+      "WebSearch",
+      "Bash(npm install:*)"
     ]
   }
 }
