@@ -4,7 +4,7 @@ import { useState, useCallback, KeyboardEvent, useImperativeHandle, forwardRef, 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { X, Upload, Loader2, Plus } from "lucide-react";
+import { X, Upload, Loader2, Plus, Search } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { useWizard } from "@/lib/wizard/wizard-context";
 import type { PropertyData } from "@/lib/wizard/types";
+import type { PropertyLookupResponse } from "@/lib/propertyLookup/types";
 
 /**
  * Property types matching the listings table enum.
@@ -138,6 +139,10 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
     const [cropModalOpen, setCropModalOpen] = useState(false);
     const [imageToCrop, setImageToCrop] = useState<string | null>(null);
 
+    // Property lookup state
+    const [isLookingUp, setIsLookingUp] = useState(false);
+    const [lookupError, setLookupError] = useState<string | null>(null);
+
     // Load saved branding from user profile on mount
     useEffect(() => {
       async function loadSavedBranding() {
@@ -180,6 +185,74 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
 
     const propertyType = watch("propertyType");
     const lotSizeUnit = watch("lotSizeUnit");
+    const watchedAddress = watch("address");
+    const watchedCity = watch("city");
+    const watchedState = watch("state");
+
+    /**
+     * Handle property lookup - fetch data from API and auto-fill form fields.
+     */
+    const handlePropertyLookup = useCallback(async () => {
+      // Validate we have the required fields
+      if (!watchedAddress || !watchedCity || !watchedState) {
+        setLookupError("Please enter address, city, and state first");
+        return;
+      }
+
+      setIsLookingUp(true);
+      setLookupError(null);
+
+      try {
+        const params = new URLSearchParams({
+          address: watchedAddress,
+          city: watchedCity,
+          state: watchedState,
+        });
+
+        const response = await fetch(`/api/property/lookup?${params}`);
+        const data: PropertyLookupResponse = await response.json();
+
+        if (!data.success || !data.property) {
+          setLookupError(data.error || "Property not found");
+          return;
+        }
+
+        const property = data.property;
+
+        // Auto-fill form fields with lookup results
+        if (property.zipCode) {
+          setValue("zipCode", property.zipCode, { shouldValidate: true });
+        }
+        if (property.propertyType) {
+          setValue("propertyType", property.propertyType, { shouldValidate: true });
+        }
+        if (property.bedrooms !== null) {
+          setValue("bedrooms", property.bedrooms, { shouldValidate: true });
+        }
+        if (property.bathrooms !== null) {
+          setValue("bathrooms", property.bathrooms, { shouldValidate: true });
+        }
+        if (property.squareFeet !== null) {
+          setValue("squareFeet", property.squareFeet, { shouldValidate: true });
+        }
+        if (property.lotSize !== null) {
+          // Lot size from API is typically in sqft
+          setValue("lotSize", property.lotSize, { shouldValidate: true });
+          setValue("lotSizeUnit", "sqft", { shouldValidate: true });
+        }
+        if (property.listingPrice !== null) {
+          setValue("listingPrice", property.listingPrice, { shouldValidate: true });
+        }
+
+        // Clear any previous error on success
+        setLookupError(null);
+      } catch (error) {
+        console.error("Property lookup failed:", error);
+        setLookupError("Failed to look up property. Please try again.");
+      } finally {
+        setIsLookingUp(false);
+      }
+    }, [watchedAddress, watchedCity, watchedState, setValue]);
 
     /**
      * Handle branding image upload.
@@ -414,6 +487,31 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
               )}
             </div>
           </div>
+
+          {/* Auto-Fill Button */}
+          <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handlePropertyLookup}
+              disabled={isLookingUp || !watchedAddress || !watchedCity || !watchedState}
+              className="gap-2"
+            >
+              {isLookingUp ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Search className="h-4 w-4" />
+              )}
+              {isLookingUp ? "Looking up..." : "Auto-Fill Property Details"}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Fetches beds, baths, sq ft, lot size, and price
+            </p>
+          </div>
+          {lookupError && (
+            <p className="text-sm text-destructive">{lookupError}</p>
+          )}
         </div>
 
         {/* Section: Property Details */}
