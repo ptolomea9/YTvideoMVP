@@ -53,10 +53,14 @@ export function MusicSelector({ value, onChange, disabled }: MusicSelectorProps)
       setLoading(true);
       try {
         const response = await fetch(`/api/music?energy=${selectedEnergy}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch music: ${response.status}`);
+        }
         const data = await response.json();
         setTracks(data.tracks || []);
       } catch (error) {
         console.error("Failed to fetch music:", error);
+        setTracks([]);
       } finally {
         setLoading(false);
       }
