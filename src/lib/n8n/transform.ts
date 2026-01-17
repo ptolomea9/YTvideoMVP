@@ -178,13 +178,12 @@ export interface N8nTourVideoPayload {
   logoUrl: string;
   headshotUrl: string;
   estimatedNarrationDuration?: number; // Estimated TTS duration in seconds (fallback for n8n)
-  // Section-to-image mapping for anchored timing
+  // Section-to-image mapping for anchored timing (n8n uses this to reorder clips)
   sectionImageMapping?: Array<{
     sectionIndex: number;
     sectionType: string;
     imageIndices: number[];
-    wordCount: number;           // Word count for timing calculation
-    estimatedDuration: number;   // Estimated TTS duration in seconds (150 WPM)
+    wordCount: number;           // Word count for reference
   }>;
 }
 
@@ -451,6 +450,7 @@ export function transformWizardToN8n(
 
   // Compute section-to-image mapping for anchored timing
   // This tells n8n which images belong to which narration section
+  // n8n uses this to reorder video clips so each section's images are contiguous
   const sortedSections = [...scriptSections].sort((a, b) => a.order - b.order);
   const sectionToImageMap = mapImagesToSections(sortedImages, sortedSections);
   const sectionImageMapping = sortedSections.map((section, idx) => {
@@ -460,17 +460,15 @@ export function transformWizardToN8n(
       .map((imgId) => sortedImages.findIndex((img) => img.id === imgId))
       .filter((i) => i >= 0);
 
-    // Calculate per-section word count and estimated duration for n8n timing
+    // Calculate per-section word count for reference
     const words = section.content.split(/\s+/).filter((w) => w.length > 0);
     const wordCount = words.length;
-    const estimatedDuration = Math.ceil((wordCount / 150) * 60); // 150 WPM
 
     return {
       sectionIndex: idx,
       sectionType: section.type,
       imageIndices,
       wordCount,
-      estimatedDuration,
     };
   });
 

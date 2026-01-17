@@ -744,3 +744,98 @@ Added single HTML element:
 - [ ] Agent name, brand, phone, email all centered and visible
 - [ ] 0.5s fade-in animation works
 - [ ] No json2video API errors
+
+### 2025-01-16: Bulletproof Narration-Image Synchronization
+
+**Problem**: Narration lagged behind images. Viewers saw outdoor images but heard living room narration, or descriptions of scenes that had already passed. The root cause was non-contiguous image assignment - images were assigned by room type (scattered indices like [2, 5, 8] for outdoor) rather than position, making sync impossible.
+
+**Solution**: Two-part fix that reorders video clips by section before merging, then syncs narration to the new contiguous boundaries.
+
+**Architecture Change**:
+```
+BEFORE (Broken):
+  Video plays in upload order: [exterior, outdoor, living, bedroom, outdoor...]
+  Sections assigned by room type → non-contiguous indices
+  Narration tries to sync to scattered images → impossible!
+
+AFTER (Fixed):
+  n8n reorders clips by section: [opening imgs] → [outdoor] → [living] → [private] → [closing]
+  Each section's clips are CONTIGUOUS
+  Narration syncs perfectly - section N starts at sum(prev sections)
+```
+
+**Frontend Changes** (`src/lib/n8n/transform.ts`):
+- Removed `estimatedDuration` from sectionImageMapping (n8n calculates from actual TTS)
+- Kept `wordCount` and `imageIndices` for n8n to use
+
+**n8n Workflow Changes** (workflow ID: `Qo2sirL0cDI2fVNQMJ5Eq`):
+
+1. **`Make body for jsontovideo Api to merge videos clips`** node - NEW REORDER LOGIC:
+   - Gets `sectionImageMapping` from webhook
+   - Reorders clips in narrative order: opening → outdoor → living → private → closing
+   - Each section's clips grouped contiguously
+   - Orphan clips (not assigned to any section) added at end
+   - Console logs: `=== CLIP REORDER ===`, original order, reordered, section boundaries
+
+2. **`prepare body for jsontovideo to set video`** node - NEW TIMING LOGIC:
+   - Reconstructs section boundaries using same narrative order algorithm
+   - Each section's narration starts when its clip group starts
+   - Opening: starts at 2s (INTRO_SILENCE)
+   - Middle sections: start at `startClip × 5s`
+   - Closing: must end before end card, speeds up if needed (max 1.3x)
+   - Console logs: `=== NARRATION TIMING (Contiguous Sections) ===`
+
+**New Algorithm Flow**:
+```javascript
+// Stage 1: Reorder clips by section
+const narrativeOrder = ['opening', 'outdoor', 'living', 'private', 'closing'];
+for (const sectionType of narrativeOrder) {
+  // Add this section's clips in sorted order
+  reorderedClips.push(...section.imageIndices.map(i => videoUrls[i]));
+  sectionBoundaries.push({ startTime, endTime, duration });
+}
+
+// Stage 2: Sync narration to boundaries
+for (const boundary of sectionBoundaries) {
+  narrationStart = boundary.startTime;  // Contiguous!
+  if (narrationDuration > availableTime) {
+    speed = Math.min(narrationDuration / availableTime, 1.3);
+  }
+}
+```
+
+**Console Output Example**:
+```
+=== CLIP REORDER ===
+Total clips: 10
+Original order: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+Reordered:      0, 1, 3, 6, 2, 4, 7, 5, 8, 9
+Section boundaries:
+  opening: clips 0-1 (0-10s)
+  outdoor: clips 2-3 (10-20s)
+  living: clips 4-6 (20-35s)
+  private: clips 7-8 (35-45s)
+  closing: clips 9-9 (45-50s)
+
+=== NARRATION TIMING (Contiguous Sections) ===
+Section "opening": clips 0-1 (0-10s), narration start=2.0s, TTS=7.5s, ends=9.5s
+Section "outdoor": clips 2-3 (10-20s), narration start=10.0s, TTS=8.2s, ends=18.2s
+Section "living": clips 4-6 (20-35s), narration start=20.0s, TTS=12.1s, ends=32.1s
+Section "private": clips 7-8 (35-45s), narration start=35.0s, TTS=6.8s, ends=41.8s
+Section "closing": clips 9-9 (45-50s), narration start=45.0s, TTS=5.2s, ends=50.2s
+```
+
+**Why This Works**:
+1. **Clips are reordered** - all outdoor clips play together, all living together, etc.
+2. **Sections are contiguous** - each section's clips form an unbroken block
+3. **Narration syncs to blocks** - section starts when its block starts
+4. **Speed adjustment** - if narration too long, speed up (max 30%)
+
+**Verification**:
+- [ ] Console shows "=== CLIP REORDER ===" with reordered indices
+- [ ] Console shows section boundaries are contiguous
+- [ ] Console shows "=== NARRATION TIMING (Contiguous Sections) ==="
+- [ ] Opening narration plays while first images are on screen
+- [ ] Each section's narration matches the images being displayed
+- [ ] Closing narration finishes before end card appears
+- [ ] No narration overlap between sections
