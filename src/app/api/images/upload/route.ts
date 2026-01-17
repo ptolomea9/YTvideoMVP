@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { nanoid } from "nanoid";
 
+// Route segment config for App Router
+export const maxDuration = 60; // seconds
+
+/**
+ * NOTE: This route has a ~4.5MB body size limit on Vercel.
+ * For larger uploads, use /api/images/get-upload-url for presigned URL uploads.
+ */
+
 /**
  * POST /api/images/upload
  *

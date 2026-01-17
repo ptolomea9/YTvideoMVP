@@ -38,6 +38,56 @@ const ROOM_TYPE_LABELS: Record<RoomType, string> = {
 };
 
 /**
+ * Upload images using presigned URLs to bypass API body size limits.
+ * Returns array of { url, filename, path } for each uploaded image.
+ */
+async function uploadImagesWithPresignedUrls(
+  files: File[]
+): Promise<{ url: string; filename: string; path: string }[]> {
+  const results = await Promise.all(
+    files.map(async (file) => {
+      // Get presigned upload URL
+      const urlResponse = await fetch("/api/images/get-upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type,
+        }),
+      });
+
+      if (!urlResponse.ok) {
+        const error = await urlResponse.json();
+        throw new Error(error.error || "Failed to get upload URL");
+      }
+
+      const { signedUrl, token, path, publicUrl } = await urlResponse.json();
+
+      // Upload directly to Supabase Storage using signed URL
+      const uploadResponse = await fetch(signedUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": file.type,
+        },
+        body: file,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Failed to upload ${file.name}`);
+      }
+
+      return {
+        url: publicUrl,
+        filename: file.name,
+        path: path,
+      };
+    })
+  );
+
+  return results;
+}
+
+/**
  * Script section requirements - maps section to required room types.
  * Each section needs at least one image from its room types.
  */
@@ -896,23 +946,9 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
       setAnalyzeError(null);
 
       try {
-        // Upload images to Supabase Storage
-        const formData = new FormData();
-        localImages.forEach((img) => {
-          formData.append("images", img.file);
-        });
-
-        const uploadResponse = await fetch("/api/images/upload", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!uploadResponse.ok) {
-          const error = await uploadResponse.json();
-          throw new Error(error.error || "Failed to upload images");
-        }
-
-        const { urls } = await uploadResponse.json();
+        // Upload images using presigned URLs (bypasses API body size limit)
+        const files = localImages.map((img) => img.file);
+        const urls = await uploadImagesWithPresignedUrls(files);
 
         // Analyze with GPT-4o Vision
         const analyzeResponse = await fetch("/api/images/sort", {
@@ -1345,22 +1381,9 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
                         setAnalyzeError(null);
 
                         try {
-                          const formData = new FormData();
-                          localImages.forEach((img) => {
-                            formData.append("images", img.file);
-                          });
-
-                          const uploadResponse = await fetch("/api/images/upload", {
-                            method: "POST",
-                            body: formData,
-                          });
-
-                          if (!uploadResponse.ok) {
-                            const error = await uploadResponse.json();
-                            throw new Error(error.error || "Failed to upload images");
-                          }
-
-                          const { urls } = await uploadResponse.json();
+                          // Upload images using presigned URLs (bypasses API body size limit)
+                          const files = localImages.map((img) => img.file);
+                          const urls = await uploadImagesWithPresignedUrls(files);
 
                           const analyzeResponse = await fetch("/api/images/sort", {
                             method: "POST",
