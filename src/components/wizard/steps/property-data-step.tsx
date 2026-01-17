@@ -25,6 +25,11 @@ import type { PropertyData } from "@/lib/wizard/types";
 import type { PropertyLookupResponse } from "@/lib/propertyLookup/types";
 
 /**
+ * localStorage key for persisting property data between sessions.
+ */
+const PROPERTY_DATA_STORAGE_KEY = "edgeai-last-property-data";
+
+/**
  * Property types matching the listings table enum.
  */
 const PROPERTY_TYPES = [
@@ -143,10 +148,11 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
     const [isLookingUp, setIsLookingUp] = useState(false);
     const [lookupError, setLookupError] = useState<string | null>(null);
 
-    // Load saved branding from user profile on mount
+    // Load saved branding from user profile and property data from localStorage on mount
     useEffect(() => {
-      async function loadSavedBranding() {
+      async function loadSavedData() {
         try {
+          // Load agent branding from Supabase user profile
           const response = await fetch("/api/branding/profile");
           if (response.ok) {
             const data = await response.json();
@@ -176,11 +182,39 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
           }
         } catch (error) {
           console.error("Error loading saved branding:", error);
-        } finally {
-          setIsLoadingBranding(false);
         }
+
+        // Load property data from localStorage (if wizard state is empty)
+        try {
+          if (typeof window !== "undefined" && !state.propertyData.address) {
+            const savedPropertyData = localStorage.getItem(PROPERTY_DATA_STORAGE_KEY);
+            if (savedPropertyData) {
+              const parsed = JSON.parse(savedPropertyData);
+              // Populate form fields with saved property data
+              if (parsed.address) setValue("address", parsed.address);
+              if (parsed.city) setValue("city", parsed.city);
+              if (parsed.state) setValue("state", parsed.state);
+              if (parsed.zipCode) setValue("zipCode", parsed.zipCode);
+              if (parsed.propertyType) setValue("propertyType", parsed.propertyType);
+              if (parsed.bedrooms !== undefined) setValue("bedrooms", parsed.bedrooms);
+              if (parsed.bathrooms !== undefined) setValue("bathrooms", parsed.bathrooms);
+              if (parsed.squareFeet !== undefined) setValue("squareFeet", parsed.squareFeet);
+              if (parsed.lotSize !== undefined) setValue("lotSize", parsed.lotSize);
+              if (parsed.lotSizeUnit) setValue("lotSizeUnit", parsed.lotSizeUnit);
+              if (parsed.listingPrice !== undefined) setValue("listingPrice", parsed.listingPrice);
+              if (parsed.description) setValue("description", parsed.description);
+              if (parsed.features && Array.isArray(parsed.features)) {
+                setPois(parsed.features);
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Error loading saved property data:", error);
+        }
+
+        setIsLoadingBranding(false);
       }
-      loadSavedBranding();
+      loadSavedData();
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const propertyType = watch("propertyType");
@@ -329,7 +363,7 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
     );
 
     /**
-     * Handle form submission - save to wizard context and persist agent info.
+     * Handle form submission - save to wizard context, persist agent info, and cache property data.
      */
     const onSubmit = useCallback(
       async (data: PropertyFormData) => {
@@ -353,6 +387,30 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
             agent_cta: data.agentCta,
           }),
         }).catch((err) => console.error("Failed to save agent info:", err));
+
+        // Persist property data to localStorage for reuse on next video
+        try {
+          if (typeof window !== "undefined") {
+            const propertyDataToSave = {
+              address: data.address,
+              city: data.city,
+              state: data.state,
+              zipCode: data.zipCode,
+              propertyType: data.propertyType,
+              bedrooms: data.bedrooms,
+              bathrooms: data.bathrooms,
+              squareFeet: data.squareFeet,
+              lotSize: data.lotSize,
+              lotSizeUnit: data.lotSizeUnit,
+              listingPrice: data.listingPrice,
+              description: data.description,
+              features: pois,
+            };
+            localStorage.setItem(PROPERTY_DATA_STORAGE_KEY, JSON.stringify(propertyDataToSave));
+          }
+        } catch (err) {
+          console.error("Failed to save property data to localStorage:", err);
+        }
 
         return true;
       },
