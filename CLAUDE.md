@@ -233,3 +233,46 @@ Output high-definition PNG.
 - Fields persisted: address, city, state, zip, propertyType, beds, baths, sqft, lot, price, description, POIs
 
 **Benefit**: Users can quickly create new videos with the same property but different photos without re-entering all property details.
+
+### 2025-01-17: Fix Audio Doubling & End Card Visibility (v2)
+
+**Problems** (Execution 8811):
+1. Audio doubling at 0:10-0:11 and 0:18-0:19 - narration overlaps between sections
+2. End card still appearing translucent despite `opacity:1;background:#FFFFFF`
+
+**Evidence** from execution 8811:
+```
+Audio 1: ends at 10.0s (start=2, duration=8.673, speed=1.084)
+Audio 2: starts at 10s, ends at 17.96s (duration=10.344, speed=1.3)
+Audio 3: starts at 17.957s ← OVERLAP! Starts 3ms BEFORE Audio 2 ends
+```
+
+**Root Causes**:
+1. **Floating-point precision issue**: While `previousAudioEndTime` tracked the end time, edge cases where `imageBasedStart ≈ previousAudioEndTime` caused micro-overlaps (3ms)
+2. **End card layering**: Missing explicit z-index meant end card rendered behind video layer
+
+**n8n Workflow Fixes** (workflow ID: `Qo2sirL0cDI2fVNQMJ5Eq`):
+
+**Fix 1: `prepare body for jsontovideo to set video`** node - Add 100ms buffer between sections:
+```javascript
+// NEW CONSTANT
+const AUDIO_BUFFER = 0.1;  // 100ms buffer between sections to prevent overlap
+
+// Middle sections: add buffer
+narrationStart = Math.max(imageBasedStart, previousAudioEndTime + AUDIO_BUFFER);
+
+// Closing section: add buffer
+narrationStart = Math.max(imageBasedStart, previousAudioEndTime + AUDIO_BUFFER);
+```
+
+**Fix 2: `json2video - Edit video1`** node - Add z-index to end card HTML:
+```html
+<div class='w-full h-full bg-white flex flex-col items-center justify-center'
+     style='opacity:1;background:#FFFFFF;z-index:9999'>
+```
+
+**Expected Results**:
+- Console logs will show `Using audio buffer: 0.1s between sections`
+- Each audio start time will be >= previous end time + 0.1s
+- No more "OVERLAP DETECTED" errors in console
+- End card will render fully opaque on top of video
