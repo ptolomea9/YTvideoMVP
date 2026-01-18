@@ -174,10 +174,10 @@ const KLING_CLIP_DURATION = 5;
 
 /**
  * Words per minute for TTS narration.
- * Using 130 WPM (balanced) - n8n handles voice speed variance with tiered adjustments.
- * Range: fast voices ~157 WPM, slow voices ~128 WPM (23% variance).
+ * Using 160 WPM (conservative estimate) - actual ElevenLabs speed is 180-200 WPM.
+ * This leaves room for natural pauses and punctuation-based slowdowns.
  */
-const TTS_WORDS_PER_MINUTE = 130;
+const TTS_WORDS_PER_MINUTE = 160;
 
 /**
  * Seconds reserved for end card (agent branding overlay).
@@ -186,16 +186,29 @@ const TTS_WORDS_PER_MINUTE = 130;
 const END_CARD_SECONDS = 8;
 
 /**
+ * Timing constants for audio-video sync.
+ * These match the n8n workflow settings for consistent timing.
+ */
+const INTRO_SILENCE = 2;      // 2s silence before first narration
+const SECTION_BUFFER = 0.5;   // 0.5s buffer between sections
+const BREATHING_ROOM = 1.5;   // 1.5s allowed overflow for richer narration
+
+/**
  * Maximum total words for entire script.
  * Allows rich, descriptive narration - n8n handles voice speed variance.
  */
 const MAX_TOTAL_WORDS = 250;
 
 /**
- * Calculate word budget for each section based on image count.
- * This ensures narration duration matches available video footage.
+ * Calculate word budget for each section based on image count and timing constraints.
+ * This ensures narration duration matches available video footage with proper sync.
  *
- * Formula: images × 5 seconds × (120 WPM / 60) = images × 10 words
+ * Timing model:
+ * - Opening: loses INTRO_SILENCE (2s) to silence before narration starts
+ * - Other sections: lose SECTION_BUFFER (0.5s) for transitions
+ * - All sections: gain BREATHING_ROOM (1.5s) for richer narration with controlled overflow
+ *
+ * Formula: availableSeconds × (160 WPM / 60) = words
  */
 interface SectionWordBudget {
   type: ScriptSectionType;
@@ -209,7 +222,7 @@ function calculateSectionWordBudgets(
   sectionGroups: Map<ScriptSectionType, ImageInput[]>,
   maxTotalWords: number
 ): SectionWordBudget[] {
-  // First pass: calculate raw budgets
+  // First pass: calculate raw budgets with timing constraints
   const rawBudgets = SECTION_CONFIG.map((config) => {
     const imagesInSection = sectionGroups.get(config.type) || [];
     const imageCount = imagesInSection.length;
@@ -219,12 +232,22 @@ function calculateSectionWordBudgets(
       ? 6
       : Math.max(imageCount * KLING_CLIP_DURATION, 0);
 
-    // Calculate target words: seconds × (words per minute / 60)
-    const exactWords = clipSeconds * (TTS_WORDS_PER_MINUTE / 60);
+    // Calculate AVAILABLE time accounting for timing constraints + breathing room
+    let availableSeconds: number;
+    if (config.type === "opening") {
+      // Opening loses 2s to intro silence, but gains breathing room
+      availableSeconds = Math.max(clipSeconds - INTRO_SILENCE + BREATHING_ROOM, 0);
+    } else {
+      // Other sections lose 0.5s buffer, but gain breathing room
+      availableSeconds = Math.max(clipSeconds - SECTION_BUFFER + BREATHING_ROOM, 0);
+    }
+
+    // Calculate target words: availableSeconds × (words per minute / 60)
+    const exactWords = availableSeconds * (TTS_WORDS_PER_MINUTE / 60);
     // Round to nearest 5, with minimum of 10 for non-empty sections
     const targetWords = Math.max(
       Math.round(exactWords / 5) * 5,
-      imageCount > 0 || config.type === "closing" ? 15 : 0
+      imageCount > 0 || config.type === "closing" ? 10 : 0
     );
 
     return {
@@ -339,16 +362,16 @@ export async function POST(request: NextRequest) {
           role: "system",
           content: `You are a luxury real estate video narrator creating compelling, descriptive scripts.
 
-TIMING GUIDELINE:
+CRITICAL TIMING CONSTRAINT:
 - This is a ${videoDuration}-second video with ${END_CARD_SECONDS}s reserved for the end card
-- Target ~${maxTotalWords} words total (~130 words per minute speaking pace)
-- The backend handles voice speed variance, so focus on quality over strict word counts
+- Voice reads at ~160 words per minute
+- Each section has a STRICT word limit - exceeding it causes narration to overlap with the next scene!
+- Target ~${maxTotalWords} words total
 
 SECTION REQUIREMENTS:
 - EVERY section MUST have at least 50 characters
+- NEVER exceed the per-section word limit (provided in the prompt)
 - Each sentence should be 8-15 words
-- Opening: Set the scene with location and first impression (30-50 words)
-- Closing: Strong call-to-action with property address (25-35 words)
 
 STYLE:
 - Rich, evocative descriptions that paint a picture
@@ -490,16 +513,16 @@ function buildScriptPrompt(
           .join("\n")
       : "- No major transitions needed - images flow naturally within similar spaces";
 
-  // Build dynamic script structure based on word budgets
+  // Build dynamic script structure based on word budgets with STRICT limits
   const scriptStructure = wordBudgets
     .map((budget) => {
       if (budget.imageCount === 0 && budget.type !== "closing") {
-        return `- ${budget.title} (10-15 words): Brief transition only (no images in this section)`;
+        return `- ${budget.title}: MAXIMUM 15 words (no images - brief transition only)`;
       }
       const description = budget.type === "closing"
         ? "Final CTA with property address"
         : `${budget.imageCount} image${budget.imageCount !== 1 ? "s" : ""} = ${budget.clipSeconds}s of footage`;
-      return `- ${budget.title} (~${budget.targetWords} words): ${description}`;
+      return `- ${budget.title}: MAXIMUM ${budget.targetWords} words (${description})`;
     })
     .join("\n");
 
@@ -521,8 +544,11 @@ ${neighborhoodPOIs}${agentContact}
 **IMAGE SEQUENCE:** (${sortedImages.length} images, shown in this order)
 ${imageSequence}
 
-**SECTION WORD TARGETS:**
+**⚠️ STRICT WORD LIMITS (DO NOT EXCEED):**
 ${scriptStructure}
+
+⚠️ Going over these limits will cause narration to OVERLAP with the next scene!
+Voice reads at 160 words per minute - these limits are calculated precisely for timing.
 
 **NARRATIVE FLOW:**
 - Opening: Set the scene, establish location and first impression
