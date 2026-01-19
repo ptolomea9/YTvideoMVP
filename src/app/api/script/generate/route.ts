@@ -205,13 +205,14 @@ const END_CARD_SECONDS = 8;
  */
 const INTRO_SILENCE = 2;      // 2s silence before first narration
 const SECTION_BUFFER = 0.5;   // 0.5s buffer between sections
-const BREATHING_ROOM = 1.5;   // 1.5s allowed overflow for richer narration
+const BREATHING_ROOM = 2.5;   // 2.5s allowed overflow for richer narration (fills gaps better)
 
 /**
  * Maximum total words for entire script.
- * Allows rich, descriptive narration - n8n handles voice speed variance.
+ * Increased to allow richer narration that fills each section's video duration.
+ * n8n handles voice speed variance with tiered adjustments.
  */
-const MAX_TOTAL_WORDS = 250;
+const MAX_TOTAL_WORDS = 320;
 
 /**
  * Calculate word budget for each section based on image count and timing constraints.
@@ -374,24 +375,41 @@ export async function POST(request: NextRequest) {
       messages: [
         {
           role: "system",
-          content: `You are a luxury real estate video narrator creating compelling, descriptive scripts.
+          content: `You are a luxury real estate video narrator creating compelling, NARRATIVE scripts that tell a STORY.
 
 CRITICAL TIMING CONSTRAINT:
 - This is a ${videoDuration}-second video with ${END_CARD_SECONDS}s reserved for the end card
 - Voice reads at ~160 words per minute
-- Each section has a STRICT word limit - exceeding it causes narration to overlap with the next scene!
-- Target ~${maxTotalWords} words total
+- Each section has a word BUDGET - use it fully to fill the video time with rich narration!
+- Target ~${maxTotalWords} words total - FILL the available time
 
 SECTION REQUIREMENTS:
 - EVERY section MUST have at least 50 characters
-- NEVER exceed the per-section word limit (provided in the prompt)
-- Each sentence should be 8-15 words
+- Use your FULL word budget for each section - short sections create awkward silence
+- Vary sentence length: mix 5-8 word punches with 12-18 word flowing descriptions
 
-STYLE:
-- Rich, evocative descriptions that paint a picture
-- Varied sentence rhythm - mix short punchy with longer flowing
-- Highlight unique features and lifestyle benefits
-- No filler phrases ("boasting", "featuring", "you'll love")
+NARRATIVE STYLE (CRITICAL):
+- Write like a high-end property tour HOST guiding someone through the home
+- NEVER list items ("This room has a ceiling fan, a desk, and hardwood floors")
+- Instead, CREATE ATMOSPHERE: "Natural light pours through expansive windows, illuminating warm hardwood floors that lead you deeper into this inviting space"
+- Describe the EXPERIENCE and FEELING, not an inventory
+- Use sensory language: light, warmth, texture, space, flow
+- Connect spaces with movement: "As we move through..." "Continuing into..." "Beyond these doors..."
+- For INTERIORS: Paint a picture of how it FEELS to be in the space
+
+IMAGE-BY-IMAGE COVERAGE (CRITICAL):
+- Count the images in each section and ensure your narration touches on EACH ONE
+- Use the distinctive features from image labels: "dual vanity" → mention dual sinks, "jetted tub" → mention spa-like soaking
+- Two images of same room type = two DISTINCT spaces to describe (not one!)
+- For PRIVATE section: MUST describe EVERY bedroom AND EVERY bathroom image
+- NEVER skip an image - each represents 5 seconds of video that needs narration
+
+FORBIDDEN PATTERNS:
+- "This room features..." / "This space has..." / "You'll find..."
+- Lists of furniture or fixtures
+- Generic descriptions like "beautiful" without specifics
+- Describing obvious things in photos ("there is a bed in the bedroom")
+- Skipping bathrooms or treating them as less important than bedrooms
 
 OUTPUT: JSON only with sections array`,
         },
@@ -400,8 +418,8 @@ OUTPUT: JSON only with sections array`,
           content: prompt,
         },
       ],
-      max_tokens: 1200,
-      temperature: 0.4,
+      max_tokens: 1500,
+      temperature: 0.5,  // Slightly higher for more creative narrative
     });
 
     const content = response.choices[0]?.message?.content;
@@ -527,16 +545,18 @@ function buildScriptPrompt(
           .join("\n")
       : "- No major transitions needed - images flow naturally within similar spaces";
 
-  // Build dynamic script structure based on word budgets with STRICT limits
+  // Build dynamic script structure based on word budgets - emphasize FILLING the budget
   const scriptStructure = wordBudgets
     .map((budget) => {
       if (budget.imageCount === 0 && budget.type !== "closing") {
-        return `- ${budget.title}: MAXIMUM 15 words (no images - brief transition only)`;
+        return `- ${budget.title}: ~15 words (no images - smooth transition)`;
       }
       const description = budget.type === "closing"
         ? "Final CTA with property address"
-        : `${budget.imageCount} image${budget.imageCount !== 1 ? "s" : ""} = ${budget.clipSeconds}s of footage`;
-      return `- ${budget.title}: MAXIMUM ${budget.targetWords} words (${description})`;
+        : `${budget.imageCount} image${budget.imageCount !== 1 ? "s" : ""} = ${budget.clipSeconds}s of footage - FILL THIS TIME`;
+      // Calculate a target range: min 80% of budget, max 100%
+      const minWords = Math.round(budget.targetWords * 0.85);
+      return `- ${budget.title}: ${minWords}-${budget.targetWords} words (${description})`;
     })
     .join("\n");
 
@@ -547,7 +567,7 @@ function buildScriptPrompt(
   // Use the passed-in maxTotalWords (already capped)
   const cappedTotalWords = Math.min(totalWords, maxTotalWords);
 
-  return `Create an engaging narration for a ${videoDuration}-second luxury property video. STRICT LIMIT: ${cappedTotalWords} words maximum.
+  return `Create an immersive, NARRATIVE tour for a ${videoDuration}-second luxury property video. Target: ${cappedTotalWords} words total.
 
 **PROPERTY:**
 ${property.address}, ${property.city}, ${getStateName(property.state)}
@@ -558,37 +578,51 @@ ${neighborhoodPOIs}${agentContact}
 **IMAGE SEQUENCE:** (${sortedImages.length} images, shown in this order)
 ${imageSequence}
 
-**⚠️ STRICT WORD LIMITS (DO NOT EXCEED):**
+**⚠️ IMAGE COVERAGE REQUIREMENT:**
+- You MUST reference EVERY image in the sequence above
+- Use distinctive features from each image label (e.g., "dual vanity", "jetted tub", "warm tones")
+- If there are 4 images in a section, the narration must cover all 4 spaces
+- NEVER skip an image - each one represents 5 seconds of video that needs narration
+- Two images of the same room type (e.g., 2 bathrooms) = two DISTINCT spaces to describe
+
+**⚠️ WORD BUDGETS - FILL EACH SECTION:**
 ${scriptStructure}
 
-⚠️ Going over these limits will cause narration to OVERLAP with the next scene!
-Voice reads at 160 words per minute - these limits are calculated precisely for timing.
+IMPORTANT: Short sections create AWKWARD SILENCE in the video. Fill each section's word budget!
+Voice reads at 160 WPM - these budgets are calculated to match each section's video duration.
 
-**NARRATIVE FLOW:**
-- Opening: Set the scene, establish location and first impression
-- Outdoor: Capture the lifestyle - entertaining, relaxation, views
-- Living: Guide through the heart of the home - flow, light, details
-- Private: Create intimacy - retreat, comfort, personal sanctuary
-- Amenities: Showcase premium features - fitness, entertainment, luxury
-- Closing: Strong call to action with property address
+**NARRATIVE APPROACH (CRITICAL):**
+- Opening: WELCOME viewers, paint the setting - time of day, light quality, neighborhood feel
+- Outdoor: CREATE the lifestyle EXPERIENCE - imagine hosting, relaxing, entertaining here
+- Living: GUIDE viewers through with movement - "As you step in..." "The eye is drawn to..."
+- Private: MUST describe EVERY IMAGE shown - if there are 2 bathrooms, describe BOTH using their unique features from the labels (dual vanity, jetted tub, marble counters, etc.). Each bedroom AND each bathroom needs narration!
+- Amenities: INSPIRE with possibilities - how these spaces enhance daily life
+- Closing: COMPEL action with emotional recap and clear contact info
+
+**STYLE RULES:**
+- Write in SECOND PERSON when appropriate ("As you enter..." "Imagine waking here...")
+- Use SENSORY details: light, warmth, texture, scent, sound
+- Create FLOW between rooms: "Beyond the living area..." "Just steps away..."
+- For BATHROOMS/BEDROOMS: Focus on sanctuary, retreat, renewal - NOT fixtures
 
 **TRANSITIONS:**
 ${transitionGuidelines}
 
-**MINIMUM LENGTH REQUIREMENT:**
-⚠️ EVERY section MUST be at least 50 characters. Sections under 50 characters will fail validation.
+**⚠️ LENGTH REQUIREMENT:**
+- EVERY section MUST be at least 50 characters
+- FILL your word budget - don't leave sections short!
 
 **OUTPUT FORMAT (JSON only):**
 {
   "sections": [
-    {"type": "opening", "content": "At least 50 chars - set the scene with location..."},
-    {"type": "outdoor", "content": "At least 50 chars - describe outdoor lifestyle..."},
-    {"type": "living", "content": "At least 50 chars - guide through living spaces..."},
-    {"type": "private", "content": "At least 50 chars - create intimacy in private areas..."},
-    {"type": "amenities", "content": "At least 50 chars - showcase premium amenities..."},
-    {"type": "closing", "content": "At least 50 chars - call to action with full address..."}
+    {"type": "opening", "content": "Evocative scene-setting with location..."},
+    {"type": "outdoor", "content": "Lifestyle narrative of outdoor spaces..."},
+    {"type": "living", "content": "Guided tour through living areas..."},
+    {"type": "private", "content": "Sanctuary feel of private spaces..."},
+    {"type": "amenities", "content": "Inspiring possibilities of amenities..."},
+    {"type": "closing", "content": "Emotional recap with call to action..."}
   ]
 }
 
-For sections with no images, still write at least 50 characters as a smooth transition.`;
+For sections with no images, write a smooth 15-word transition to the next space.`;
 }
