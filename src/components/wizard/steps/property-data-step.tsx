@@ -72,6 +72,7 @@ const propertyDataSchema = z.object({
   agentEmail: z.string().email().optional().or(z.literal("")),
   agentSocial: z.string().optional(),
   agentCta: z.string().optional(),
+  agentBrandName: z.string().optional(),
 });
 
 type PropertyFormData = z.infer<typeof propertyDataSchema>;
@@ -128,6 +129,7 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
         agentEmail: state.propertyData.agentEmail || "",
         agentSocial: state.propertyData.agentSocial || "",
         agentCta: state.propertyData.agentCta || "Schedule a Private Tour",
+        agentBrandName: state.propertyData.agentBrandName || "",
       },
     });
 
@@ -178,6 +180,9 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
             }
             if (data.agent_cta && !state.propertyData.agentCta) {
               setValue("agentCta", data.agent_cta);
+            }
+            if (data.brand_name && !state.propertyData.agentBrandName) {
+              setValue("agentBrandName", data.brand_name);
             }
           }
         } catch (error) {
@@ -385,6 +390,7 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             agent_name: data.agentName,
+            brand_name: data.agentBrandName,
             agent_phone: data.agentPhone,
             agent_email: data.agentEmail,
             agent_social: data.agentSocial,
@@ -735,7 +741,7 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
             </p>
           </div>
 
-          {/* Agent Name & Email */}
+          {/* Agent Name & Brand Name */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="agentName">Agent Name</Label>
@@ -748,6 +754,22 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="agentBrandName">Brand / Brokerage Name</Label>
+              <Input
+                id="agentBrandName"
+                placeholder="Luxury Realty Group"
+                className="focus-visible:ring-primary/50"
+                {...register("agentBrandName")}
+              />
+              <p className="text-xs text-muted-foreground">
+                Shown below your name on the end card
+              </p>
+            </div>
+          </div>
+
+          {/* Email & Phone */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
               <Label htmlFor="agentEmail">Email</Label>
               <Input
                 id="agentEmail"
@@ -757,10 +779,7 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
                 {...register("agentEmail")}
               />
             </div>
-          </div>
 
-          {/* Phone & Social */}
-          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="agentPhone">Phone Number</Label>
               <Input
@@ -771,16 +790,17 @@ export const PropertyDataStep = forwardRef<PropertyDataStepHandle>(
                 {...register("agentPhone")}
               />
             </div>
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="agentSocial">Social Handle</Label>
-              <Input
-                id="agentSocial"
-                placeholder="@youragent"
-                className="focus-visible:ring-primary/50"
-                {...register("agentSocial")}
-              />
-            </div>
+          {/* Social Handle */}
+          <div className="space-y-2">
+            <Label htmlFor="agentSocial">Social Handle</Label>
+            <Input
+              id="agentSocial"
+              placeholder="@youragent"
+              className="focus-visible:ring-primary/50"
+              {...register("agentSocial")}
+            />
           </div>
 
           {/* Call-to-Action */}

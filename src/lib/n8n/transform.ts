@@ -176,6 +176,7 @@ export interface N8nTourVideoPayload {
   agentPhone: string;
   agentEmail: string;
   agentCta: string;
+  brandName: string;
   logoUrl: string;
   headshotUrl: string;
   estimatedNarrationDuration?: number; // Estimated TTS duration in seconds (fallback for n8n)
@@ -399,6 +400,19 @@ function estimateNarrationDuration(scriptSections: ScriptSection[]): number {
 }
 
 /**
+ * Sanitize text for TTS pronunciation.
+ * Replaces "@username" with "at username" for proper pronunciation.
+ *
+ * @param text - Text content to sanitize
+ * @returns Sanitized text with @ symbols replaced for TTS
+ */
+function sanitizeForTts(text: string): string {
+  // Replace @username patterns with "at username"
+  // Pattern: @ followed by word characters (letters, numbers, underscores)
+  return text.replace(/@(\w+)/g, 'at $1');
+}
+
+/**
  * Transform wizard state into n8n Tour Video webhook payload.
  *
  * @param propertyData - Property information from Step 1
@@ -423,10 +437,10 @@ export function transformWizardToN8n(
     imageurl: getImageUrl(img),
   }));
 
-  // Extract script content for TTS
+  // Extract script content for TTS (sanitized for pronunciation)
   const webhookResponse = scriptSections
     .sort((a, b) => a.order - b.order)
-    .map((section) => section.content);
+    .map((section) => sanitizeForTts(section.content));
 
   // Determine music URL and beat data
   const musicUrl = musicTrack?.url || getDefaultMusicUrl();
@@ -503,6 +517,7 @@ export function transformWizardToN8n(
     agentPhone: propertyData.agentPhone || "",
     agentEmail: propertyData.agentEmail || "",
     agentCta: propertyData.agentCta || "Contact Me Today",
+    brandName: propertyData.agentBrandName || "",
     logoUrl: propertyData.agentLogoUrl || "",
     headshotUrl: propertyData.agentPhotoUrl || "",
     // Estimated narration duration for n8n timing calculations (fallback)

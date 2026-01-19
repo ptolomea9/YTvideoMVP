@@ -45,6 +45,7 @@ export interface PropertyData {
   agentEmail?: string;
   agentSocial?: string;
   agentCta?: string;        // Call-to-action text (e.g., "Schedule a Tour")
+  agentBrandName?: string;  // Brand name for end card (e.g., "Luxury Realty Group")
   agentLogoUrl?: string;    // Uploaded logo URL
   agentPhotoUrl?: string;   // Uploaded headshot URL
 }
