@@ -36,6 +36,12 @@ const ROOM_TYPE_LABELS: Record<RoomType, string> = {
   bathroom: "Bath",
   home_office: "Office",
   outdoor: "Outdoor",
+  gym: "Gym",
+  media_room: "Media",
+  walk_in_closet: "Closet",
+  laundry: "Laundry",
+  wine_cellar: "Wine",
+  game_room: "Games",
   other: "Other",
 };
 
@@ -116,8 +122,14 @@ const SECTION_REQUIREMENTS: SectionRequirement[] = [
   {
     section: "private",
     label: "Private Spaces",
-    roomTypes: ["master_bedroom", "guest_bedroom", "bedroom", "bathroom", "home_office"],
-    description: "Bedroom, bathroom, or home office",
+    roomTypes: ["master_bedroom", "guest_bedroom", "bedroom", "bathroom"],
+    description: "Bedroom or bathroom",
+  },
+  {
+    section: "amenities",
+    label: "Amenities",
+    roomTypes: ["home_office", "gym", "media_room", "walk_in_closet", "laundry", "wine_cellar", "game_room"],
+    description: "Luxury amenities like gym, media room, or wine cellar",
   },
   {
     section: "outdoor",

@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     const analyzed = await analyzeImages(validUrls);
 
     // Sort by room type order for video sequence
-    // Flow: Exterior → Outdoor → Living spaces → Private spaces
+    // Flow: Exterior → Outdoor → Living spaces → Private spaces → Amenities
     const roomTypeOrder: RoomType[] = [
       "exterior",       // Front of house - curb appeal
       "outdoor",        // Backyard/patio - show grounds early
@@ -88,7 +88,13 @@ export async function POST(request: NextRequest) {
       "guest_bedroom",  // Guest bedroom (after master, before generic bedroom)
       "bedroom",        // Other bedrooms
       "bathroom",       // Bathrooms
-      "home_office",    // Home office/study (private space)
+      "home_office",    // Home office/study
+      "gym",            // Fitness/gym room
+      "media_room",     // Home theater/media room
+      "walk_in_closet", // Walk-in closet
+      "laundry",        // Laundry room
+      "wine_cellar",    // Wine cellar
+      "game_room",      // Game room/recreation
       "other",          // Miscellaneous
     ];
 

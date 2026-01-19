@@ -14,6 +14,7 @@ import {
   Loader2,
   Check,
   Pencil,
+  Gem,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,11 @@ const SECTION_CONFIG: Record<
     title: "Private Retreat",
     icon: Bed,
     description: "Showcase bedrooms and bathrooms",
+  },
+  amenities: {
+    title: "Amenities",
+    icon: Gem,
+    description: "Showcase luxury amenities and special features",
   },
   outdoor: {
     title: "Outdoor Living",
@@ -330,7 +336,7 @@ export const ScriptStep = React.forwardRef<ScriptStepHandle>(
     const [isGenerating, setIsGenerating] = React.useState(false);
     const [regeneratingSection, setRegeneratingSection] = React.useState<string | null>(null);
     const [expandedSections, setExpandedSections] = React.useState<Set<ScriptSectionType>>(
-      new Set(["opening", "living", "private", "outdoor", "closing"])
+      new Set(["opening", "living", "private", "amenities", "outdoor", "closing"])
     );
     const [error, setError] = React.useState<string | null>(null);
 
@@ -582,7 +588,7 @@ export const ScriptStep = React.forwardRef<ScriptStepHandle>(
           >
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Check className="h-4 w-4 text-green-500" />
-              <span>5 sections generated • Click to expand and edit</span>
+              <span>6 sections generated • Click to expand and edit</span>
             </div>
 
             {scriptSections.map((section) => (

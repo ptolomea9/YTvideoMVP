@@ -20,12 +20,13 @@ function getOpenAI(): OpenAI {
 /**
  * Section configuration for grouping images and generating narrative.
  *
- * Flow: Exterior → Outdoor → Living spaces → Private spaces → Closing
+ * Flow: Exterior → Outdoor → Living spaces → Private spaces → Amenities → Closing
  * This creates a natural tour progression:
  * - Approach the house (curb appeal)
  * - Show the grounds/outdoor spaces
  * - Enter and explore living spaces
  * - Retreat to private bedrooms/bathrooms
+ * - Showcase premium amenities (gym, media room, wine cellar, etc.)
  * - Call to action
  */
 const SECTION_CONFIG: {
@@ -37,6 +38,7 @@ const SECTION_CONFIG: {
   { type: "outdoor", title: "Outdoor Living", roomTypes: ["outdoor"] },
   { type: "living", title: "Living Spaces", roomTypes: ["entry", "living", "kitchen", "dining"] },
   { type: "private", title: "Private Retreat", roomTypes: ["master_bedroom", "bedroom", "bathroom"] },
+  { type: "amenities", title: "Premium Amenities", roomTypes: ["home_office", "gym", "media_room", "walk_in_closet", "laundry", "wine_cellar", "game_room"] },
   { type: "closing", title: "Closing", roomTypes: [] }, // No images, CTA only
 ];
 
@@ -48,6 +50,7 @@ const ROOM_GROUPS: Record<string, RoomType[]> = {
   outdoor_amenities: ["outdoor"],
   interior_main: ["entry", "living", "kitchen", "dining"],
   interior_private: ["master_bedroom", "bedroom", "bathroom"],
+  premium_amenities: ["home_office", "gym", "media_room", "walk_in_closet", "laundry", "wine_cellar", "game_room"],
 };
 
 /**
@@ -68,27 +71,38 @@ const TRANSITION_HINTS: Record<string, Record<string, string>> = {
     outdoor_amenities: "As we explore the grounds...",
     interior_main: "Step inside and discover...",
     interior_private: "Moving through to the private spaces...",
+    premium_amenities: "The property's exclusive features include...",
   },
   outdoor_amenities: {
     exterior_approach: "Returning to the front...",
     interior_main: "Now let's head inside...",
     interior_private: "Inside, the private quarters await...",
+    premium_amenities: "This home also offers premium amenities...",
   },
   interior_main: {
     exterior_approach: "Back outside...",
     outdoor_amenities: "The outdoor living continues...",
     interior_private: "The private retreat begins...",
+    premium_amenities: "For entertainment and relaxation...",
   },
   interior_private: {
     exterior_approach: "Stepping back outside...",
     outdoor_amenities: "The outdoor amenities...",
     interior_main: "Returning to the living spaces...",
+    premium_amenities: "Beyond the bedrooms, discover...",
+  },
+  premium_amenities: {
+    exterior_approach: "Returning outside...",
+    outdoor_amenities: "The outdoor spaces complement...",
+    interior_main: "Back to the heart of the home...",
+    interior_private: "The private quarters offer...",
   },
   other: {
     exterior_approach: "Moving on...",
     outdoor_amenities: "Continuing the tour...",
     interior_main: "Exploring further...",
     interior_private: "And finally...",
+    premium_amenities: "The amenities include...",
   },
 };
 
@@ -555,6 +569,7 @@ Voice reads at 160 words per minute - these limits are calculated precisely for 
 - Outdoor: Capture the lifestyle - entertaining, relaxation, views
 - Living: Guide through the heart of the home - flow, light, details
 - Private: Create intimacy - retreat, comfort, personal sanctuary
+- Amenities: Showcase premium features - fitness, entertainment, luxury
 - Closing: Strong call to action with property address
 
 **TRANSITIONS:**
@@ -570,6 +585,7 @@ ${transitionGuidelines}
     {"type": "outdoor", "content": "At least 50 chars - describe outdoor lifestyle..."},
     {"type": "living", "content": "At least 50 chars - guide through living spaces..."},
     {"type": "private", "content": "At least 50 chars - create intimacy in private areas..."},
+    {"type": "amenities", "content": "At least 50 chars - showcase premium amenities..."},
     {"type": "closing", "content": "At least 50 chars - call to action with full address..."}
   ]
 }

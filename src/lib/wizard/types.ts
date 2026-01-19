@@ -64,6 +64,12 @@ export type RoomType =
   | "bathroom"
   | "home_office"      // Home office/study
   | "outdoor"
+  | "gym"              // Fitness/exercise room
+  | "media_room"       // Theater/media room
+  | "walk_in_closet"   // Walk-in closet
+  | "laundry"          // Laundry room
+  | "wine_cellar"      // Wine cellar/storage
+  | "game_room"        // Game room/recreation
   | "other";
 
 /**
@@ -112,13 +118,14 @@ export interface WizardImage {
 }
 
 /**
- * Script section types for the 5 tour sections.
+ * Script section types for the 6 tour sections.
  */
 export type ScriptSectionType =
   | "opening"    // Exterior/curb appeal
   | "living"     // Entry, living, kitchen, dining
   | "private"    // Bedrooms, bathrooms
-  | "outdoor"    // Backyard, amenities, POIs
+  | "amenities"  // Premium amenities (gym, media room, wine cellar, etc.)
+  | "outdoor"    // Backyard, outdoor living, POIs
   | "closing";   // CTA wrap-up
 
 /**

@@ -30,6 +30,12 @@ export type RoomType =
   | "bathroom"
   | "home_office"      // Home office/study
   | "outdoor"
+  | "gym"              // Fitness/exercise room
+  | "media_room"       // Theater/media room
+  | "walk_in_closet"   // Walk-in closet
+  | "laundry"          // Laundry room
+  | "wine_cellar"      // Wine cellar/storage
+  | "game_room"        // Game room/recreation
   | "other";
 
 /**
@@ -68,8 +74,14 @@ For each image, provide:
    - Be specific: "Master Suite with Coffered Ceiling" not just "Bedroom"
    - Highlight unique features: "Gourmet Kitchen with Marble Island", "Private Dock with Boat Lift"
    - For bedrooms: distinguish "Master Bedroom/Suite" from "Guest Bedroom", "Kids Room", etc.
+   - For luxury amenities: "Home Theater", "Wine Cellar", "Personal Gym", "Walk-in Closet", "Game Room"
 
-2. A room type for video sequencing (one of: exterior, entry, living, kitchen, dining, master_bedroom, guest_bedroom, bedroom, bathroom, home_office, outdoor, other)
+2. A room type for video sequencing (one of: exterior, entry, living, kitchen, dining, master_bedroom, guest_bedroom, bedroom, bathroom, home_office, outdoor, gym, media_room, walk_in_closet, laundry, wine_cellar, game_room, other)
+   - Use gym for fitness/exercise rooms
+   - Use media_room for home theaters/movie rooms
+   - Use walk_in_closet for dedicated closet spaces
+   - Use wine_cellar for wine storage areas
+   - Use game_room for recreation/game rooms
 
 3. Notable features that should be mentioned in narration (2-4 bullet points)
 

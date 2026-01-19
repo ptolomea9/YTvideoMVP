@@ -15,7 +15,8 @@ import { getDefaultMusicUrl } from "./music";
 const SECTION_TO_ROOM_MAPPING: Record<ScriptSectionType, RoomType[]> = {
   opening: ["exterior"],
   living: ["entry", "living", "kitchen", "dining"],
-  private: ["master_bedroom", "guest_bedroom", "bedroom", "bathroom", "home_office"],
+  private: ["master_bedroom", "guest_bedroom", "bedroom", "bathroom"],
+  amenities: ["home_office", "gym", "media_room", "walk_in_closet", "laundry", "wine_cellar", "game_room"],
   outdoor: ["outdoor"],
   closing: ["exterior", "outdoor"], // CTA often shows hero exterior or lifestyle shot
 };
