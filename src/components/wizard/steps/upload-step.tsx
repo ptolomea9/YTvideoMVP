@@ -31,8 +31,10 @@ const ROOM_TYPE_LABELS: Record<RoomType, string> = {
   kitchen: "Kitchen",
   dining: "Dining",
   master_bedroom: "Master",
+  guest_bedroom: "Guest BR",
   bedroom: "Bedroom",
   bathroom: "Bath",
+  home_office: "Office",
   outdoor: "Outdoor",
   other: "Other",
 };
@@ -114,8 +116,8 @@ const SECTION_REQUIREMENTS: SectionRequirement[] = [
   {
     section: "private",
     label: "Private Spaces",
-    roomTypes: ["master_bedroom", "bedroom", "bathroom"],
-    description: "Bedroom or bathroom",
+    roomTypes: ["master_bedroom", "guest_bedroom", "bedroom", "bathroom", "home_office"],
+    description: "Bedroom, bathroom, or home office",
   },
   {
     section: "outdoor",
@@ -187,6 +189,7 @@ interface AnalyzedImage {
   label: string;
   roomType: RoomType;
   features: string[];
+  originalUploadIndex: number;       // Original upload position (before room-type sorting)
   enhancement: EnhancementPreset;
   enhancementStatus: EnhancementStatus;
   enhancedUrls: EnhancedUrlCache;
@@ -859,6 +862,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           label: img.label,
           roomType: img.roomType,
           features: img.features,
+          originalUploadIndex: img.originalUploadIndex,
           enhancement: img.enhancement,
           enhancementStatus: img.enhancementStatus,
           enhancedUrls: img.enhancedUrls,
@@ -966,13 +970,14 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
 
         // Map response to our format
         const images: AnalyzedImage[] = analyzed.map(
-          (item: { url: string; filename: string; label: string; roomType: RoomType; features: string[] }, idx: number) => ({
+          (item: { url: string; filename: string; label: string; roomType: RoomType; features: string[]; originalUploadIndex: number }, idx: number) => ({
             id: nanoid(),
             url: item.url,
             filename: item.filename || `image-${idx + 1}`,
             label: item.label,
             roomType: item.roomType,
             features: item.features || [],
+            originalUploadIndex: item.originalUploadIndex ?? idx, // Use API value or fallback to idx
             enhancement: "original" as EnhancementPreset,
             enhancementStatus: "idle" as EnhancementStatus,
             enhancedUrls: {},
@@ -988,6 +993,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           url: img.url,
           filename: img.filename,
           order: idx,
+          originalUploadIndex: img.originalUploadIndex,
           label: img.label,
           roomType: img.roomType,
           features: img.features,
@@ -1030,6 +1036,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           url: img.url,
           filename: img.filename,
           order: idx,
+          originalUploadIndex: img.originalUploadIndex,
           label: img.label,
           roomType: img.roomType,
           features: img.features,
@@ -1062,6 +1069,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           url: img.url,
           filename: img.filename,
           order: idx,
+          originalUploadIndex: img.originalUploadIndex,
           label: img.label,
           roomType: img.roomType,
           features: img.features,
@@ -1218,6 +1226,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           url: img.url,
           filename: img.filename,
           order: idx,
+          originalUploadIndex: img.originalUploadIndex,
           label: img.label,
           roomType: img.roomType,
           features: img.features,
@@ -1242,6 +1251,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
           url: img.url,
           filename: img.filename,
           order: idx,
+          originalUploadIndex: img.originalUploadIndex,
           label: img.label,
           roomType: img.roomType,
           features: img.features,
@@ -1399,14 +1409,18 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
                           const { analyzed } = await analyzeResponse.json();
 
                           // Merge with existing analyzed images
+                          // For new images, offset originalUploadIndex by existing count
+                          const existingCount = analyzedImages.length;
                           const newAnalyzedImages: AnalyzedImage[] = analyzed.map(
-                            (item: { url: string; filename: string; label: string; roomType: RoomType; features: string[] }, idx: number) => ({
+                            (item: { url: string; filename: string; label: string; roomType: RoomType; features: string[]; originalUploadIndex: number }, idx: number) => ({
                               id: nanoid(),
                               url: item.url,
-                              filename: item.filename || `image-${analyzedImages.length + idx + 1}`,
+                              filename: item.filename || `image-${existingCount + idx + 1}`,
                               label: item.label,
                               roomType: item.roomType,
                               features: item.features || [],
+                              // Offset the originalUploadIndex by existing count so new images have unique indices
+                              originalUploadIndex: existingCount + (item.originalUploadIndex ?? idx),
                               enhancement: "original" as EnhancementPreset,
                               enhancementStatus: "idle" as EnhancementStatus,
                               enhancedUrls: {},
@@ -1422,6 +1436,7 @@ export const UploadStep = React.forwardRef<UploadStepHandle>(
                             url: img.url,
                             filename: img.filename,
                             order: idx,
+                            originalUploadIndex: img.originalUploadIndex,
                             label: img.label,
                             roomType: img.roomType,
                             features: img.features,

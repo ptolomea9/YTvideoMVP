@@ -85,8 +85,10 @@ export async function POST(request: NextRequest) {
       "kitchen",        // Kitchen
       "dining",         // Dining area
       "master_bedroom", // Master suite
+      "guest_bedroom",  // Guest bedroom (after master, before generic bedroom)
       "bedroom",        // Other bedrooms
       "bathroom",       // Bathrooms
+      "home_office",    // Home office/study (private space)
       "other",          // Miscellaneous
     ];
 
@@ -94,7 +96,17 @@ export async function POST(request: NextRequest) {
       return roomTypeOrder.indexOf(a.roomType) - roomTypeOrder.indexOf(b.roomType);
     });
 
-    return NextResponse.json({ analyzed: sorted });
+    // Add originalUploadIndex to each item (original position before sorting)
+    const sortedWithOriginalIndex = sorted.map((item) => {
+      // Find original position in the pre-sorted array
+      const originalIdx = analyzed.findIndex(orig => orig.url === item.url);
+      return {
+        ...item,
+        originalUploadIndex: originalIdx,
+      };
+    });
+
+    return NextResponse.json({ analyzed: sortedWithOriginalIndex });
   } catch (error) {
     console.error("Image analysis error:", error);
     return NextResponse.json(

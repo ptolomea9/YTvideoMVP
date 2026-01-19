@@ -25,8 +25,10 @@ export type RoomType =
   | "kitchen"
   | "dining"
   | "master_bedroom"
+  | "guest_bedroom"    // Guest bedroom (distinct from master)
   | "bedroom"
   | "bathroom"
+  | "home_office"      // Home office/study
   | "outdoor"
   | "other";
 
@@ -67,7 +69,7 @@ For each image, provide:
    - Highlight unique features: "Gourmet Kitchen with Marble Island", "Private Dock with Boat Lift"
    - For bedrooms: distinguish "Master Bedroom/Suite" from "Guest Bedroom", "Kids Room", etc.
 
-2. A room type for video sequencing (one of: exterior, entry, living, kitchen, dining, master_bedroom, bedroom, bathroom, outdoor, other)
+2. A room type for video sequencing (one of: exterior, entry, living, kitchen, dining, master_bedroom, guest_bedroom, bedroom, bathroom, home_office, outdoor, other)
 
 3. Notable features that should be mentioned in narration (2-4 bullet points)
 

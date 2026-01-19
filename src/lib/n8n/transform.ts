@@ -15,7 +15,7 @@ import { getDefaultMusicUrl } from "./music";
 const SECTION_TO_ROOM_MAPPING: Record<ScriptSectionType, RoomType[]> = {
   opening: ["exterior"],
   living: ["entry", "living", "kitchen", "dining"],
-  private: ["master_bedroom", "bedroom", "bathroom"],
+  private: ["master_bedroom", "guest_bedroom", "bedroom", "bathroom", "home_office"],
   outdoor: ["outdoor"],
   closing: ["exterior", "outdoor"], // CTA often shows hero exterior or lifestyle shot
 };
@@ -455,9 +455,14 @@ export function transformWizardToN8n(
   const sectionToImageMap = mapImagesToSections(sortedImages, sortedSections);
   const sectionImageMapping = sortedSections.map((section, idx) => {
     const imageIds = sectionToImageMap.get(section.id) || [];
-    // Convert image IDs to indices in the sorted images array
+    // Convert image IDs to ORIGINAL UPLOAD indices (preserves user's intended order)
+    // This prevents n8n from scrambling images within sections
     const imageIndices = imageIds
-      .map((imgId) => sortedImages.findIndex((img) => img.id === imgId))
+      .map((imgId) => {
+        const img = sortedImages.find((i) => i.id === imgId);
+        // Use originalUploadIndex if available, fallback to sorted array position
+        return img?.originalUploadIndex ?? sortedImages.findIndex((i) => i.id === imgId);
+      })
       .filter((i) => i >= 0);
 
     // Calculate per-section word count for reference

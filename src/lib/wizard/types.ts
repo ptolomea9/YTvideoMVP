@@ -59,8 +59,10 @@ export type RoomType =
   | "kitchen"
   | "dining"
   | "master_bedroom"
+  | "guest_bedroom"    // Guest bedroom (distinct from master)
   | "bedroom"
   | "bathroom"
+  | "home_office"      // Home office/study
   | "outdoor"
   | "other";
 
@@ -100,6 +102,7 @@ export interface WizardImage {
   url: string;                      // Original image URL
   filename: string;
   order: number;
+  originalUploadIndex: number;      // Preserves original upload position (before room-type sorting)
   label: string;                    // AI-suggested label (editable by user)
   roomType: RoomType;               // Broad category for video sequencing
   features: string[];               // Notable features for script generation
