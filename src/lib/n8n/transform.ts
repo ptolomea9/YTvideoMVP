@@ -455,14 +455,10 @@ export function transformWizardToN8n(
   const sectionToImageMap = mapImagesToSections(sortedImages, sortedSections);
   const sectionImageMapping = sortedSections.map((section, idx) => {
     const imageIds = sectionToImageMap.get(section.id) || [];
-    // Convert image IDs to ORIGINAL UPLOAD indices (preserves user's intended order)
-    // This prevents n8n from scrambling images within sections
+    // Convert image IDs to sorted array indices
+    // These indices match the images array sent to n8n (which is also sorted)
     const imageIndices = imageIds
-      .map((imgId) => {
-        const img = sortedImages.find((i) => i.id === imgId);
-        // Use originalUploadIndex if available, fallback to sorted array position
-        return img?.originalUploadIndex ?? sortedImages.findIndex((i) => i.id === imgId);
-      })
+      .map((imgId) => sortedImages.findIndex((i) => i.id === imgId))
       .filter((i) => i >= 0);
 
     // Calculate per-section word count for reference
