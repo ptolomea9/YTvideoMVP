@@ -68,15 +68,21 @@ export function MediaKitDialog({
     }
   };
 
-  // Trigger browser download
-  const triggerDownload = (url: string, filename: string) => {
+  // Trigger browser download via blob fetch (works for cross-origin URLs)
+  const triggerDownload = async (url: string, filename: string) => {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+
     const link = document.createElement('a');
-    link.href = url;
+    link.href = blobUrl;
     link.download = filename;
-    link.target = '_blank';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+
+    // Clean up blob URL after download starts
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
   };
 
   // Handle download button click
@@ -89,27 +95,34 @@ export function MediaKitDialog({
       return;
     }
 
-    if (type === 'branded' || type === 'both') {
-      triggerDownload(urls.branded.url, urls.branded.filename);
-      toast.success('Downloading branded video');
-    }
+    try {
+      if (type === 'branded' || type === 'both') {
+        await triggerDownload(urls.branded.url, urls.branded.filename);
+        if (type === 'branded') {
+          toast.success('Downloading branded video');
+        }
+      }
 
-    if ((type === 'unbranded' || type === 'both') && urls.unbranded.url) {
-      // Small delay between downloads
+      if ((type === 'unbranded' || type === 'both') && urls.unbranded.url) {
+        // Small delay between downloads
+        if (type === 'both') {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        await triggerDownload(urls.unbranded.url, urls.unbranded.filename);
+        if (type === 'unbranded') {
+          toast.success('Downloading unbranded video');
+        }
+      }
+
       if (type === 'both') {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        toast.success(urls.unbranded.url ? 'Downloading both versions' : 'Downloading video');
       }
-      triggerDownload(urls.unbranded.url, urls.unbranded.filename);
-      if (type === 'unbranded') {
-        toast.success('Downloading unbranded video');
-      }
+    } catch (error) {
+      console.error('Download failed:', error);
+      toast.error('Download failed. Please try again.');
+    } finally {
+      setDownloadingType(null);
     }
-
-    if (type === 'both' && urls.unbranded.url) {
-      toast.success('Downloading both versions');
-    }
-
-    setDownloadingType(null);
   };
 
   // Reset state when dialog closes

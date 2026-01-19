@@ -8,6 +8,7 @@ import { VideoWithListing, VIDEO_STATUS_CONFIG } from '@/types/video';
 import { cn } from '@/lib/utils';
 import { VideoProgressOverlay } from './VideoProgressOverlay';
 import { MediaKitDialog } from './MediaKitDialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +25,9 @@ interface VideoCardProps {
   video: VideoWithListing;
   onSelect?: () => void;
   onDelete?: (videoId: string) => void;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (videoId: string) => void;
 }
 
 /**
@@ -32,7 +36,14 @@ interface VideoCardProps {
  * Hover state includes subtle scale and border highlight.
  * Completed videos autoplay on hover.
  */
-export function VideoCard({ video, onSelect, onDelete }: VideoCardProps) {
+export function VideoCard({
+  video,
+  onSelect,
+  onDelete,
+  isSelectionMode = false,
+  isSelected = false,
+  onToggleSelect,
+}: VideoCardProps) {
   const statusConfig = VIDEO_STATUS_CONFIG[video.status];
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isHovering, setIsHovering] = useState(false);
@@ -53,7 +64,7 @@ export function VideoCard({ video, onSelect, onDelete }: VideoCardProps) {
 
   // Check if video is completed and has a video URL
   const canPlayVideo = video.status === 'completed' && video.branded_url;
-  const isClickable = canPlayVideo && onSelect;
+  const isClickable = isSelectionMode || (canPlayVideo && onSelect);
 
   // Check if video is in-progress or failed (for overlay and disabling hover)
   const isInProgress = ['pending', 'processing', 'sorting_images', 'generating_motion', 'generating_audio', 'rendering'].includes(video.status);
@@ -61,7 +72,9 @@ export function VideoCard({ video, onSelect, onDelete }: VideoCardProps) {
   const showOverlay = isInProgress || isFailed;
 
   const handleClick = () => {
-    if (isClickable) {
+    if (isSelectionMode && onToggleSelect) {
+      onToggleSelect(video.id);
+    } else if (canPlayVideo && onSelect) {
       onSelect();
     }
   };
@@ -93,7 +106,8 @@ export function VideoCard({ video, onSelect, onDelete }: VideoCardProps) {
     <motion.div
       className={cn(
         'group relative overflow-hidden rounded-xl border border-border bg-card',
-        isClickable && 'cursor-pointer'
+        isClickable && 'cursor-pointer',
+        isSelected && 'ring-2 ring-gold ring-offset-2 ring-offset-background'
       )}
       whileHover={showOverlay ? undefined : { scale: 1.02 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
@@ -105,7 +119,7 @@ export function VideoCard({ video, onSelect, onDelete }: VideoCardProps) {
       onKeyDown={(e) => {
         if (isClickable && (e.key === 'Enter' || e.key === ' ')) {
           e.preventDefault();
-          onSelect();
+          handleClick();
         }
       }}
     >
@@ -189,47 +203,65 @@ export function VideoCard({ video, onSelect, onDelete }: VideoCardProps) {
           </span>
         </div>
 
-        {/* Delete button - top left, visible on hover */}
-        {onDelete && (
+        {/* Checkbox - top left, visible in selection mode */}
+        {isSelectionMode ? (
           <div className="absolute top-3 left-3 z-30">
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <button
-                  onClick={(e) => e.stopPropagation()}
-                  disabled={isDeleting}
-                  className={cn(
-                    'p-2 rounded-full bg-black/50 hover:bg-destructive/80 transition-colors backdrop-blur-sm',
-                    'focus:outline-none',
-                    isDeleting && 'opacity-50 cursor-not-allowed'
-                  )}
-                  aria-label="Delete video"
-                >
-                  {isDeleting ? (
-                    <Loader2 className="w-4 h-4 text-white animate-spin" />
-                  ) : (
-                    <Trash2 className="w-4 h-4 text-white" />
-                  )}
-                </button>
-              </AlertDialogTrigger>
-              <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete this video?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently delete the video for &quot;{displayAddress}&quot; and cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDelete}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onToggleSelect) onToggleSelect(video.id);
+              }}
+              className="p-1.5 rounded-md bg-black/50 backdrop-blur-sm cursor-pointer"
+            >
+              <Checkbox
+                checked={isSelected}
+                className="h-5 w-5 border-2 border-white data-[state=checked]:border-gold"
+              />
+            </div>
           </div>
+        ) : (
+          /* Delete button - top left, visible on hover */
+          onDelete && (
+            <div className="absolute top-3 left-3 z-30">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button
+                    onClick={(e) => e.stopPropagation()}
+                    disabled={isDeleting}
+                    className={cn(
+                      'p-2 rounded-full bg-black/50 hover:bg-destructive/80 transition-colors backdrop-blur-sm',
+                      'focus:outline-none',
+                      isDeleting && 'opacity-50 cursor-not-allowed'
+                    )}
+                    aria-label="Delete video"
+                  >
+                    {isDeleting ? (
+                      <Loader2 className="w-4 h-4 text-white animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4 text-white" />
+                    )}
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete this video?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete the video for &quot;{displayAddress}&quot; and cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDelete}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          )
         )}
 
         {/* Address overlay - bottom with gradient (hidden when progress overlay is shown) */}
@@ -258,8 +290,13 @@ export function VideoCard({ video, onSelect, onDelete }: VideoCardProps) {
           </div>
         )}
 
-        {/* Hover border highlight */}
-        <div className="absolute inset-0 border-2 border-transparent group-hover:border-gold/50 rounded-xl transition-colors duration-200 pointer-events-none z-10" />
+        {/* Hover border highlight / Selection indicator */}
+        <div
+          className={cn(
+            'absolute inset-0 border-2 rounded-xl transition-colors duration-200 pointer-events-none z-10',
+            isSelected ? 'border-gold' : 'border-transparent group-hover:border-gold/50'
+          )}
+        />
       </div>
 
       {/* Media Kit Download Dialog */}
