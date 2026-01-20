@@ -205,14 +205,14 @@ const END_CARD_SECONDS = 8;
  */
 const INTRO_SILENCE = 2;      // 2s silence before first narration
 const SECTION_BUFFER = 0.5;   // 0.5s buffer between sections
-const BREATHING_ROOM = 2.5;   // 2.5s allowed overflow for richer narration (fills gaps better)
+const BREATHING_ROOM = 2.0;   // 2s allowed overflow (compromise for bleed-over)
 
 /**
  * Maximum total words for entire script.
- * Increased to allow richer narration that fills each section's video duration.
- * n8n handles voice speed variance with tiered adjustments.
+ * Reduced to prevent audio timing issues from overly long scripts.
+ * 200 words at 160 WPM = 75 seconds - comfortable for 50-60s videos.
  */
-const MAX_TOTAL_WORDS = 320;
+const MAX_TOTAL_WORDS = 200;
 
 /**
  * Calculate word budget for each section based on image count and timing constraints.
@@ -380,8 +380,8 @@ export async function POST(request: NextRequest) {
 CRITICAL TIMING CONSTRAINT:
 - This is a ${videoDuration}-second video with ${END_CARD_SECONDS}s reserved for the end card
 - Voice reads at ~160 words per minute
-- Each section has a word BUDGET - use it fully to fill the video time with rich narration!
-- Target ~${maxTotalWords} words total - FILL the available time
+- Each section has a word budget - aim for 80-100% of target to fill video time without overflow
+- Target ${Math.round(maxTotalWords * 0.85)}-${maxTotalWords} words total - balance richness with timing
 
 SECTION REQUIREMENTS:
 - EVERY section MUST have at least 50 characters
@@ -554,8 +554,8 @@ function buildScriptPrompt(
       const description = budget.type === "closing"
         ? "Final CTA with property address"
         : `${budget.imageCount} image${budget.imageCount !== 1 ? "s" : ""} = ${budget.clipSeconds}s of footage - FILL THIS TIME`;
-      // Calculate a target range: min 80% of budget, max 100%
-      const minWords = Math.round(budget.targetWords * 0.85);
+      // Calculate a target range: min 75% of budget, max 100%
+      const minWords = Math.round(budget.targetWords * 0.75);
       return `- ${budget.title}: ${minWords}-${budget.targetWords} words (${description})`;
     })
     .join("\n");
@@ -588,7 +588,7 @@ ${imageSequence}
 **⚠️ WORD BUDGETS - FILL EACH SECTION:**
 ${scriptStructure}
 
-IMPORTANT: Short sections create AWKWARD SILENCE in the video. Fill each section's word budget!
+IMPORTANT: Aim for your word budget to avoid awkward silence, but don't exceed limits.
 Voice reads at 160 WPM - these budgets are calculated to match each section's video duration.
 
 **NARRATIVE APPROACH (CRITICAL):**
@@ -610,7 +610,7 @@ ${transitionGuidelines}
 
 **⚠️ LENGTH REQUIREMENT:**
 - EVERY section MUST be at least 50 characters
-- FILL your word budget - don't leave sections short!
+- Aim for 80-100% of your word budget - balance richness with timing
 
 **OUTPUT FORMAT (JSON only):**
 {

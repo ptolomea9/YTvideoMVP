@@ -221,6 +221,10 @@ export const WIZARD_VALIDATION = {
   MIN_SECTION_CHARS: 50,
   /** Target words per section for optimal narration */
   TARGET_SECTION_WORDS: 50,
+  /** Max words per section before warning (amber at 60, red at 70) */
+  MAX_SECTION_WORDS: 60,
+  /** Max total words across all sections to prevent audio timing issues */
+  MAX_TOTAL_WORDS: 200,
 } as const;
 
 export const initialWizardState: WizardState = {

@@ -62,12 +62,15 @@ const SECTION_CONFIG: Record<
 };
 
 /**
- * Word count color based on target of ~50 words.
+ * Word count color based on WIZARD_VALIDATION limits.
+ * Green: under MAX_SECTION_WORDS (60)
+ * Amber: 60-70 (slightly over)
+ * Red: over 70 (timing issues likely)
  */
 function getWordCountColor(count: number): string {
   if (count === 0) return "text-muted-foreground";
-  if (count < 50) return "text-green-500";
-  if (count <= 70) return "text-amber-500";
+  if (count <= WIZARD_VALIDATION.MAX_SECTION_WORDS) return "text-green-500";
+  if (count <= WIZARD_VALIDATION.MAX_SECTION_WORDS + 10) return "text-amber-500";
   return "text-red-500";
 }
 
@@ -367,6 +370,33 @@ export const ScriptStep = React.forwardRef<ScriptStepHandle>(
           );
           return false;
         }
+
+        // Check maximum word count per section
+        const longSections = scriptSections.filter(
+          (s) => s.content.trim().split(/\s+/).filter(Boolean).length > WIZARD_VALIDATION.MAX_SECTION_WORDS + 10
+        );
+        if (longSections.length > 0) {
+          const sectionNames = longSections
+            .map((s) => SECTION_CONFIG[s.type].title)
+            .join(", ");
+          setError(
+            `Sections too long: ${sectionNames}. Each section should be under ${WIZARD_VALIDATION.MAX_SECTION_WORDS + 10} words to avoid timing issues.`
+          );
+          return false;
+        }
+
+        // Check total word count
+        const totalWordCount = scriptSections.reduce(
+          (sum, s) => sum + s.content.trim().split(/\s+/).filter(Boolean).length,
+          0
+        );
+        if (totalWordCount > WIZARD_VALIDATION.MAX_TOTAL_WORDS) {
+          setError(
+            `Total script too long (${totalWordCount} words). Maximum is ${WIZARD_VALIDATION.MAX_TOTAL_WORDS} words to ensure proper audio timing.`
+          );
+          return false;
+        }
+
         return true;
       },
     }));
@@ -532,6 +562,7 @@ export const ScriptStep = React.forwardRef<ScriptStepHandle>(
       0
     );
     const totalDuration = Math.round((totalWords / 150) * 60);
+    const isOverLimit = totalWords > WIZARD_VALIDATION.MAX_TOTAL_WORDS;
 
     return (
       <div className="flex flex-col gap-6">
@@ -541,9 +572,12 @@ export const ScriptStep = React.forwardRef<ScriptStepHandle>(
             <h2 className="font-heading text-2xl font-semibold text-foreground">
               Your Video Script
             </h2>
-            <p className="mt-2 text-muted-foreground">
+            <p className={cn(
+              "mt-2",
+              isOverLimit ? "text-red-500" : "text-muted-foreground"
+            )}>
               {scriptSections.length > 0
-                ? `${totalWords} words • ~${totalDuration}s narration`
+                ? `${totalWords}/${WIZARD_VALIDATION.MAX_TOTAL_WORDS} words • ~${totalDuration}s narration${isOverLimit ? ' ⚠️ Over limit!' : ''}`
                 : "AI will generate a cohesive narration for your tour"}
             </p>
           </div>
